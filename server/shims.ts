@@ -67,13 +67,14 @@ export function openDb(path: string): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_answers_session ON answers(session_code);
   `);
-  // v0.2 session columns (SQLite has no ADD COLUMN IF NOT EXISTS)
+  // v0.2+ session columns (SQLite has no ADD COLUMN IF NOT EXISTS)
   const cols = new Set(
     (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name),
   );
   if (!cols.has('title')) db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''`);
   if (!cols.has('status')) db.exec(`ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'live'`);
   if (!cols.has('ended_at')) db.exec('ALTER TABLE sessions ADD COLUMN ended_at INTEGER');
+  if (!cols.has('host_token')) db.exec(`ALTER TABLE sessions ADD COLUMN host_token TEXT NOT NULL DEFAULT ''`);
   return db;
 }
 
@@ -234,6 +235,7 @@ class SessionCtx {
   constructor(
     private persist: () => void,
     private instance: SessionLike,
+    private onDrop: () => void = () => {},
   ) {}
 
   storage = {
@@ -244,6 +246,13 @@ class SessionCtx {
     },
     setAlarm: async (ts: number): Promise<void> => this.arm(ts),
     deleteAlarm: async (): Promise<void> => this.arm(null),
+    deleteAll: async (): Promise<void> => {
+      if (this.alarmTimer) clearTimeout(this.alarmTimer);
+      this.alarmTimer = null;
+      this.alarmAt = null;
+      this.store = {};
+      this.onDrop();
+    },
   };
 
   setWebSocketAutoResponse(_s: unknown): void {
@@ -342,7 +351,13 @@ export class SessionNamespace {
       const row = this.db.prepare('SELECT json FROM do_state WHERE name = ?').get(name) as
         | { json: string }
         | undefined;
-      const ctx = new SessionCtx(() => this.writeState(name), null as unknown as SessionLike);
+      const ctx = new SessionCtx(
+        () => this.writeState(name),
+        null as unknown as SessionLike,
+        () => {
+          this.db.prepare('DELETE FROM do_state WHERE name = ?').run(name);
+        },
+      );
       // The class only uses ctx after construction, so back-fill the instance now.
       const instance = new SessionDO(ctx as never, {
         DB: makeD1(this.db) as unknown as D1Database,

@@ -325,6 +325,55 @@ try {
   assert.ok(q4Answers.every((a) => a.correct === null && a.gained === 0), 'unscored likert recorded with null outcome');
   step(`records: session+players(IP ${alice.ip})+answers written to SQLite`);
 
+  // 12b. admin management: tokens exposed, delete session/quiz, live guard -----
+  const q2 = await api('/api/quizzes', { method: 'POST', headers: adminHeaders, body: JSON.stringify({ title: 'Deletable' }) });
+  assert.equal(q2.status, 200);
+  const savedQ2 = await api(`/api/quizzes/${q2.body.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      token: q2.body.editToken,
+      quiz: { title: 'Deletable', questions: [{ id: 'd1', type: 'truefalse', prompt: 'P?', answer: true, timeLimitSec: 10 }] },
+    }),
+  });
+  assert.equal(savedQ2.status, 200, 'quiz2 populated before going live');
+  const ov2 = await api('/api/admin/overview', { headers: adminHeaders });
+  const q2row = ov2.body.quizzes.find((q) => q.id === q2.body.id);
+  assert.equal(q2row.edit_token, q2.body.editToken, 'overview exposes the edit token');
+  const s2 = await api(`/api/quizzes/${q2.body.id}/sessions`, { method: 'POST', body: JSON.stringify({ token: q2.body.editToken }) });
+  assert.equal(s2.status, 200);
+  const ov3 = await api('/api/admin/overview', { headers: adminHeaders });
+  const s2row = ov3.body.sessions.find((s) => s.code === s2.body.code);
+  assert.equal(s2row.host_token, s2.body.hostToken, 'overview exposes the host token');
+
+  // deleting a quiz with a live session is refused
+  const delLive = await api(`/api/quizzes/${q2.body.id}`, { method: 'DELETE', headers: adminHeaders });
+  assert.equal(delLive.status, 409);
+  assert.equal(delLive.body.code, s2.body.code);
+
+  // force-delete the live session: rows + DO state gone
+  const delSess = await api(`/api/sessions/${s2.body.code}`, { method: 'DELETE', headers: adminHeaders });
+  assert.equal(delSess.status, 200);
+  const sum2 = await api(`/api/sessions/${s2.body.code}`);
+  assert.equal(sum2.status, 404);
+  assert.equal(sum2.body.exists, false, 'dropped session no longer exists');
+  const ov4 = await api('/api/admin/overview', { headers: adminHeaders });
+  assert.equal(ov4.body.sessions.find((s) => s.code === s2.body.code), undefined, 'session row removed');
+  assert.equal(ov4.body.players.filter((p) => p.session_code === s2.body.code).length, 0, 'session players removed');
+
+  // now the quiz has no live session — delete succeeds and cascades
+  const delQuiz = await api(`/api/quizzes/${q2.body.id}`, { method: 'DELETE', headers: adminHeaders });
+  assert.equal(delQuiz.status, 200);
+  const ov5 = await api('/api/admin/overview', { headers: adminHeaders });
+  assert.equal(ov5.body.quizzes.find((q) => q.id === q2.body.id), undefined, 'quiz removed');
+  step('admin: tokens exposed, live-guard 409, session+quiz delete cascade');
+
+  // 12c. any admin browser can open the editor + host screen (server-side links)
+  const quiz1row = ov5.body.quizzes.find((q) => q.id === id);
+  assert.ok(quiz1row.edit_token === editToken, 'quiz1 editable from any browser');
+  const sess1row = ov5.body.sessions.find((s) => s.code === code);
+  assert.ok(sess1row.host_token === hostToken, 'session1 host screen reachable from any browser');
+  step('admin links carry edit/host tokens from the server');
+
   // 13. reset flow (?reset=1) invalidates the old token --------------------------
   const reset = await api('/api/admin/password', { method: 'POST', body: JSON.stringify({ password: 'reset-pass-456' }) });
   assert.equal(reset.status, 200);

@@ -109,10 +109,11 @@ app.get('/api/admin/verify', async (c) => {
 app.get('/api/admin/overview', async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const quizzes = await c.env.DB.prepare('SELECT id, title, created_at, updated_at FROM quizzes ORDER BY created_at DESC')
-    .all<{ id: string; title: string; created_at: number; updated_at: number }>();
+  const quizzes = await c.env.DB.prepare(
+    'SELECT id, title, edit_token, created_at, updated_at FROM quizzes ORDER BY created_at DESC',
+  ).all<{ id: string; title: string; edit_token: string; created_at: number; updated_at: number }>();
   const sessions = await c.env.DB.prepare(`
-    SELECT s.code, s.quiz_id, s.title, s.status, s.created_at, s.ended_at,
+    SELECT s.code, s.quiz_id, s.title, s.status, s.created_at, s.ended_at, s.host_token,
            (SELECT COUNT(*) FROM players p WHERE p.session_code = s.code) AS player_count
     FROM sessions s ORDER BY s.created_at DESC LIMIT 100`).all();
   const players = await c.env.DB.prepare(
@@ -247,8 +248,8 @@ app.post('/api/quizzes/:id/sessions', async (c) => {
     if (!res.ok) return c.json({ error: 'create_failed' }, 500);
     const out = (await res.json()) as { hostToken: string };
     created = { code, hostToken: out.hostToken };
-    await c.env.DB.prepare('INSERT INTO sessions (code, quiz_id, created_at, title, status) VALUES (?, ?, ?, ?, ?)')
-      .bind(code, row.id, Date.now(), v.quiz.title, 'live')
+    await c.env.DB.prepare('INSERT INTO sessions (code, quiz_id, created_at, title, status, host_token) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(code, row.id, Date.now(), v.quiz.title, 'live', created.hostToken)
       .run();
   }
   if (!created) return c.json({ error: 'code_collision' }, 500);
@@ -260,6 +261,31 @@ app.post('/api/quizzes/:id/sessions', async (c) => {
     joinUrl: `${origin}/#/join/${created.code}`,
     hostUrl: `${origin}/#/host/${created.code}?h=${created.hostToken}`,
   });
+});
+
+// Deleting a quiz removes its sessions and all recorded rows. Refused while
+// any session of the quiz is still live (same rule as editing).
+app.delete('/api/quizzes/:id', async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const id = c.req.param('id');
+  const row = await quizRow(c.env, id);
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  const live = await liveSession(c.env, id);
+  if (live) return c.json({ error: 'locked', code: live.code, message: `A live session (${live.code}) is running — end it before deleting.` }, 409);
+
+  const sess = await c.env.DB.prepare('SELECT code FROM sessions WHERE quiz_id = ?').bind(id).all<{ code: string }>();
+  const codes = (sess.results ?? []).map((r) => r.code);
+  for (let i = 0; i < codes.length; i += 50) {
+    const chunk = codes.slice(i, i + 50);
+    await c.env.DB.batch([
+      ...chunk.map((code) => c.env.DB.prepare('DELETE FROM answers WHERE session_code = ?').bind(code)),
+      ...chunk.map((code) => c.env.DB.prepare('DELETE FROM players WHERE session_code = ?').bind(code)),
+    ]);
+  }
+  await c.env.DB.prepare('DELETE FROM sessions WHERE quiz_id = ?').bind(id).run();
+  await c.env.DB.prepare('DELETE FROM quizzes WHERE id = ?').bind(id).run();
+  return c.json({ ok: true, deletedSessions: codes.length });
 });
 
 // ----------------------------------------------------------------- sessions
@@ -313,6 +339,22 @@ app.get('/api/sessions/:code/state', async (c) => {
   const search = new URL(c.req.url).search;
   const res = await stubFor(c.env, normalizeCode(c.req.param('code'))).fetch('https://do/state' + search);
   return new Response(res.body, { status: res.status, headers: { 'content-type': 'application/json' } });
+});
+
+// Admin: drop a session entirely — DO state plus every recorded row.
+app.delete('/api/sessions/:code', async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const code = normalizeCode(c.req.param('code'));
+  try {
+    await stubFor(c.env, code).fetch('https://do/drop', { method: 'POST' });
+  } catch {
+    // DO unreachable — rows still go
+  }
+  await c.env.DB.prepare('DELETE FROM answers WHERE session_code = ?').bind(code).run();
+  await c.env.DB.prepare('DELETE FROM players WHERE session_code = ?').bind(code).run();
+  await c.env.DB.prepare('DELETE FROM sessions WHERE code = ?').bind(code).run();
+  return c.json({ ok: true });
 });
 
 // WebSocket upgrade — forwarded straight into the session DO.

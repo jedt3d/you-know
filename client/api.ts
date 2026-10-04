@@ -66,6 +66,7 @@ export interface AdminStatus {
 export interface AdminQuizRow {
   id: string;
   title: string;
+  edit_token: string;
   created_at: number;
   updated_at: number;
 }
@@ -77,6 +78,7 @@ export interface AdminSessionRow {
   status: string;
   created_at: number;
   ended_at: number | null;
+  host_token: string;
   player_count: number;
 }
 
@@ -123,6 +125,10 @@ export const adminVerify = (token: string) => api<{ ok: true }>('/api/admin/veri
 export const adminOverview = (token: string) => api<AdminOverview>('/api/admin/overview', { headers: authHeaders(token) });
 export const adminSessionDetail = (token: string, code: string) =>
   api<AdminSessionDetail>(`/api/admin/sessions/${code}`, { headers: authHeaders(token) });
+export const deleteQuiz = (token: string, id: string) =>
+  api<{ ok: true; deletedSessions: number }>(`/api/quizzes/${id}`, { method: 'DELETE', headers: authHeaders(token) });
+export const deleteSession = (token: string, code: string) =>
+  api<{ ok: true }>(`/api/sessions/${code}`, { method: 'DELETE', headers: authHeaders(token) });
 export const getQuiz = (id: string, token: string) => api<QuizView>(`/api/quizzes/${id}?token=${encodeURIComponent(token)}`);
 export const saveQuiz = (id: string, token: string, quiz: { title: string; questions: Question[] }) =>
   api<{ ok: true; savedAt: number; title: string }>(`/api/quizzes/${id}`, { method: 'PUT', body: JSON.stringify({ token, quiz }) });

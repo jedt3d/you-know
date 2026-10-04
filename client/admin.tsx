@@ -1,8 +1,10 @@
-// Admin: password gate (setup on first run, `?reset=1` to reset) and the
-// data view — quizzes, sessions, players with IPs, per-answer records.
+// Admin: password gate (setup on first run, `?reset=1` to reset, sign out)
+// and the data view — quizzes (click to edit, deletable), sessions (open the
+// host screen, expandable detail, deletable), players with IPs, per-answer
+// records.
 
-import { useEffect, useState } from 'preact/hooks';
 import { Fragment } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 import {
   adminLogin,
   adminOverview,
@@ -10,6 +12,8 @@ import {
   adminSetPassword,
   adminStatus,
   adminVerify,
+  deleteQuiz,
+  deleteSession,
   store,
   type AdminOverview,
   type AdminSessionDetail,
@@ -21,8 +25,8 @@ const wantsReset = () => /(^|[?&])reset=1/.test(location.hash.split('?')[1] ?? '
 
 type Phase = 'loading' | 'setup' | 'login' | 'reset' | 'ok';
 
-/** Password gate. Renders children only once unlocked (token verified). */
-export function AdminGate({ children }: { children: (token: string) => preact.ComponentChildren }) {
+/** Password gate. Renders children(token, signOut) once unlocked. */
+export function AdminGate({ children }: { children: (token: string, signOut: () => void) => preact.ComponentChildren }) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
@@ -65,8 +69,14 @@ export function AdminGate({ children }: { children: (token: string) => preact.Co
     }
   };
 
+  const signOut = () => {
+    store.setAdminToken(null);
+    setToken('');
+    setPhase('login');
+  };
+
   if (phase === 'loading') return <p class="muted">Checking…</p>;
-  if (phase === 'ok') return <>{children(token)}</>;
+  if (phase === 'ok') return <>{children(token, signOut)}</>;
   return <PasswordForm mode={phase} busy={busy} error={error} onSubmit={(p) => submit(p, phase)} />;
 }
 
@@ -143,13 +153,13 @@ export function AdminPage() {
         </button>
         <div class="card-title">Admin — recorded data</div>
       </div>
-      <AdminGate>{(token) => <AdminData token={token} />}</AdminGate>
+      <AdminGate>{(token, signOut) => <AdminData token={token} signOut={signOut} />}</AdminGate>
       <Footer />
     </div>
   );
 }
 
-function AdminData({ token }: { token: string }) {
+function AdminData({ token, signOut }: { token: string; signOut: () => void }) {
   const [data, setData] = useState<AdminOverview | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<string | null>(null);
@@ -161,13 +171,46 @@ function AdminData({ token }: { token: string }) {
 
   useEffect(() => {
     void loadOverview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  const removeQuiz = async (id: string, title: string) => {
+    if (!confirm(`Delete quiz "${title}"? Its sessions and all recorded data go too.`)) return;
+    try {
+      await deleteQuiz(token, id);
+      setError('');
+      await loadOverview();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed');
+    }
+  };
+
+  const removeSession = async (code: string) => {
+    if (!confirm(`Delete session ${code}? Its players, answers and live game are removed.`)) return;
+    try {
+      await deleteSession(token, code);
+      setError('');
+      setOpen(null);
+      await loadOverview();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed');
+    }
+  };
 
   if (error) return <div class="error">{error}</div>;
   if (!data) return <p class="muted">Loading…</p>;
 
   return (
     <>
+      <div class="qrow">
+        <p class="muted small" style="flex:1">
+          Click a quiz title to edit it; click a session row for its records.
+        </p>
+        <button class="btn btn-ghost btn-sm" onClick={signOut}>
+          Sign out
+        </button>
+      </div>
+
       <div class="card">
         <div class="card-title">Quizzes ({data.quizzes.length})</div>
         <table class="admin-table">
@@ -177,20 +220,34 @@ function AdminData({ token }: { token: string }) {
               <th>ID</th>
               <th>Created</th>
               <th>Updated</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {data.quizzes.map((q) => (
               <tr key={q.id}>
-                <td>{q.title}</td>
+                <td>
+                  <a
+                    href={`#/edit/${q.id}?token=${q.edit_token}`}
+                    title="Open the editor for this quiz"
+                    style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--accent)"
+                  >
+                    {q.title}
+                  </a>
+                </td>
                 <td class="mono small">{q.id}</td>
                 <td class="small">{fmt(q.created_at)}</td>
                 <td class="small">{fmt(q.updated_at)}</td>
+                <td>
+                  <button class="icon-btn" title="Delete quiz" onClick={() => removeQuiz(q.id, q.title)}>
+                    ✕
+                  </button>
+                </td>
               </tr>
             ))}
             {data.quizzes.length === 0 && (
               <tr>
-                <td colspan={4} class="muted">
+                <td colspan={5} class="muted">
                   No quizzes yet.
                 </td>
               </tr>
@@ -210,6 +267,7 @@ function AdminData({ token }: { token: string }) {
               <th>Players</th>
               <th>Started</th>
               <th>Ended</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -224,13 +282,28 @@ function AdminData({ token }: { token: string }) {
                   <td>{s.player_count}</td>
                   <td class="small">{fmt(s.created_at)}</td>
                   <td class="small">{fmt(s.ended_at)}</td>
+                  <td class="qrow" style="flex-wrap:nowrap">
+                    <a class="icon-btn" title="Open host screen" href={`#/host/${s.code}?h=${s.host_token}`}>
+                      ▶
+                    </a>
+                    <button
+                      class="icon-btn"
+                      title="Delete session"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void removeSession(s.code);
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
-                {open === s.code && <SessionDetail token={token} code={s.code} span={6} />}
+                {open === s.code && <SessionDetail token={token} code={s.code} span={7} />}
               </Fragment>
             ))}
             {data.sessions.length === 0 && (
               <tr>
-                <td colspan={6} class="muted">
+                <td colspan={7} class="muted">
                   No sessions yet.
                 </td>
               </tr>

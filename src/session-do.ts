@@ -166,6 +166,13 @@ export class SessionDO {
     await this.load();
     try {
       if (req.method === 'POST' && url.pathname === '/create') return await this.create(await this.readJson(req));
+      if (req.method === 'POST' && url.pathname === '/drop') {
+        // Admin delete: wipe state + alarm; connected sockets fall away.
+        await this.ctx.storage.deleteAlarm();
+        await this.ctx.storage.deleteAll();
+        this.data = null;
+        return json({ ok: true });
+      }
       if (!this.data) return json({ error: 'not_found' }, 404);
       if (req.method === 'GET' && url.pathname === '/summary') return json(this.summary());
       if (req.method === 'GET' && url.pathname === '/state') return this.getState(url);
