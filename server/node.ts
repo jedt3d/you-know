@@ -73,8 +73,14 @@ const env = {
 
 // ------------------------------------------------------------- http + ws
 
+interface NodeInfo {
+  incoming?: { socket?: { remoteAddress?: string } };
+}
+
 const server = serve({
-  fetch: (req: Request) => workerApp.fetch(req, env),
+  // @ts-ignore -- the adapter passes HttpBindings as 2nd arg
+  fetch: (req: Request, info?: NodeInfo) =>
+    workerApp.fetch(req, { ...env, remoteIp: info?.incoming?.socket?.remoteAddress ?? undefined }),
   hostname: HOST,
   port: PORT,
 });

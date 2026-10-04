@@ -40,7 +40,40 @@ export function openDb(path: string): Database.Database {
       name     TEXT PRIMARY KEY,
       json     TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS players (
+      session_code TEXT NOT NULL,
+      player_id    TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      ip           TEXT,
+      user_agent   TEXT,
+      score        INTEGER NOT NULL DEFAULT 0,
+      joined_at    INTEGER NOT NULL,
+      PRIMARY KEY (session_code, player_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_players_session ON players(session_code);
+    CREATE TABLE IF NOT EXISTS answers (
+      session_code TEXT NOT NULL,
+      player_id    TEXT NOT NULL,
+      q_index      INTEGER NOT NULL,
+      answer       TEXT NOT NULL,
+      correct      INTEGER,
+      gained       INTEGER NOT NULL DEFAULT 0,
+      answered_at  INTEGER NOT NULL,
+      PRIMARY KEY (session_code, player_id, q_index)
+    );
+    CREATE INDEX IF NOT EXISTS idx_answers_session ON answers(session_code);
   `);
+  // v0.2 session columns (SQLite has no ADD COLUMN IF NOT EXISTS)
+  const cols = new Set(
+    (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name),
+  );
+  if (!cols.has('title')) db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''`);
+  if (!cols.has('status')) db.exec(`ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'live'`);
+  if (!cols.has('ended_at')) db.exec('ALTER TABLE sessions ADD COLUMN ended_at INTEGER');
   return db;
 }
 
@@ -56,7 +89,7 @@ export function makeD1(db: Database.Database) {
   return {
     prepare(sql: string) {
       const stmt = db.prepare(sql);
-      const bound = (...args: unknown[]): D1Result<never> => ({
+      const ops = (...args: unknown[]): D1Result<never> => ({
         async first<T>() {
           return (stmt.get(...args) as T) ?? null;
         },
@@ -68,7 +101,16 @@ export function makeD1(db: Database.Database) {
           return { success: true } as const;
         },
       });
-      return { bind: bound };
+      // D1 allows prepare().all() with no bindings at all
+      const unbound = ops();
+      return { bind: ops, first: unbound.first, all: unbound.all, run: unbound.run };
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      // sequential execution; D1's transactional batch is not needed for
+      // these idempotent record writes
+      const results = [];
+      for (const s of statements) results.push(await s.run());
+      return results;
     },
   };
 }
@@ -302,7 +344,9 @@ export class SessionNamespace {
         | undefined;
       const ctx = new SessionCtx(() => this.writeState(name), null as unknown as SessionLike);
       // The class only uses ctx after construction, so back-fill the instance now.
-      const instance = new SessionDO(ctx as never, {}) as unknown as SessionLike;
+      const instance = new SessionDO(ctx as never, {
+        DB: makeD1(this.db) as unknown as D1Database,
+      }) as unknown as SessionLike;
       (ctx as unknown as { instance: SessionLike }).instance = instance;
       e = { ctx, instance };
       this.entries.set(name, e);

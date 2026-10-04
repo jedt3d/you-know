@@ -17,6 +17,7 @@ their slides, players join with a short code or QR on their phones.
 | 4 | **Audience** | Software developers and C-level staff. 6-character unambiguous join codes, mild rate limits (60 joins/min, 200 players, 1 answer per question), no public directory. UI is polished enough to project in a boardroom. |
 | 5 | **Deploy shape** | One Worker (Hono + TypeScript) serves the SPA (Workers Static Assets), the REST API, D1 and the session DO. No Pages. |
 | 6 | **Quiz mutation** | **Editing is locked while any session of the quiz is running** (409). The session plays a frozen snapshot; edits apply to the next session. |
+| 7 | **Admin & records (v0.2)** | Quiz management + the data view are protected by an admin password (PBKDF2 hash in the `settings` table; set on first run, `?reset=1` resets it — deliberately open). The DO writes durable records to SQLite/D1 as the game unfolds: sessions (status, ended_at), players (name, IP, user agent, score), and per-question answers (answer JSON, correct/gained, answered_at). |
 
 ## Question types
 

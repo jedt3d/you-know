@@ -68,8 +68,27 @@ const chans = {};
 try {
   console.log(`E2E against ${BASE}`);
 
+  // 0. admin: setup/reset (POST /password works for both), then use the token
+  const st0 = await api('/api/admin/status');
+  assert.equal(st0.status, 200);
+  const noCreate = await api('/api/quizzes', { method: 'POST', body: JSON.stringify({ title: 'Nope' }) });
+  assert.equal(noCreate.status, 403, 'creating a quiz without the admin token is rejected');
+  const weak = await api('/api/admin/password', { method: 'POST', body: JSON.stringify({ password: 'short' }) });
+  assert.equal(weak.status, 400, 'weak password rejected');
+  const setup = await api('/api/admin/password', { method: 'POST', body: JSON.stringify({ password: 'test-admin-pass' }) });
+  assert.equal(setup.status, 200);
+  assert.ok(setup.body.token);
+  const st1 = await api('/api/admin/status');
+  assert.equal(st1.body.setup, false, 'after setup the password exists');
+  const adminHeaders = { 'x-admin-token': setup.body.token };
+  const badLogin = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: 'wrong' }) });
+  assert.equal(badLogin.status, 403);
+  const goodLogin = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: 'test-admin-pass' }) });
+  assert.equal(goodLogin.status, 200);
+  step('admin: first-run setup, login, gating enforced');
+
   // 1. create + populate a quiz --------------------------------------------
-  const created = await api('/api/quizzes', { method: 'POST', body: JSON.stringify({ title: 'E2E Quiz' }) });
+  const created = await api('/api/quizzes', { method: 'POST', headers: adminHeaders, body: JSON.stringify({ title: 'E2E Quiz' }) });
   assert.equal(created.status, 200);
   const { id, editToken } = created.body;
   assert.ok(id && editToken);
@@ -272,6 +291,48 @@ try {
   const evil = await api(`/api/sessions/${code}/cmd`, { method: 'POST', body: JSON.stringify({ hostToken: 'evil', cmd: 'start' }) });
   assert.equal(evil.status, 403);
   step('host commands require the host token');
+
+  // 12. durable records: sessions, players (IP), answers, scores ------------------
+  await new Promise((r) => setTimeout(r, 1200)); // let the DO's D1 writes land
+  const noAuth = await api('/api/admin/overview');
+  assert.equal(noAuth.status, 403, 'admin overview requires the token');
+  const ov = await api('/api/admin/overview', { headers: adminHeaders });
+  assert.equal(ov.status, 200);
+  const sessRow = ov.body.sessions.find((s) => s.code === code);
+  assert.ok(sessRow, 'session row recorded');
+  assert.equal(sessRow.status, 'ended');
+  assert.ok(sessRow.ended_at > 0, 'ended_at recorded');
+  assert.equal(sessRow.title, 'E2E Quiz');
+  const quizRow = ov.body.quizzes.find((q) => q.id === id);
+  assert.ok(quizRow, 'quiz row visible to admin');
+  const recPlayers = ov.body.players.filter((p) => p.session_code === code);
+  assert.equal(recPlayers.length, 3, 'all 3 players recorded');
+  const alice = recPlayers.find((p) => p.name === 'Alice');
+  assert.ok(alice.score >= 4990 && alice.score <= 5000, `alice final score recorded (got ${alice.score})`);
+  assert.ok(alice.ip, `player IP recorded (got ${JSON.stringify(alice.ip)})`);
+  assert.ok(alice.user_agent, 'user agent recorded');
+  const detail = await api(`/api/admin/sessions/${code}`, { headers: adminHeaders });
+  assert.equal(detail.status, 200);
+  const q1Answers = detail.body.answers.filter((a) => a.q_index === 0);
+  assert.equal(q1Answers.length, 3, 'q1 answers recorded');
+  const aliceQ1 = q1Answers.find((a) => a.name === 'Alice');
+  assert.equal(aliceQ1.correct, 1);
+  assert.equal(aliceQ1.gained, 1000);
+  const carolQ1 = q1Answers.find((a) => a.name === 'Carol');
+  assert.equal(carolQ1.correct, 0);
+  assert.equal(carolQ1.gained, 0);
+  const q4Answers = detail.body.answers.filter((a) => a.q_index === 3); // unscored likert
+  assert.ok(q4Answers.every((a) => a.correct === null && a.gained === 0), 'unscored likert recorded with null outcome');
+  step(`records: session+players(IP ${alice.ip})+answers written to SQLite`);
+
+  // 13. reset flow (?reset=1) invalidates the old token --------------------------
+  const reset = await api('/api/admin/password', { method: 'POST', body: JSON.stringify({ password: 'reset-pass-456' }) });
+  assert.equal(reset.status, 200);
+  const oldToken = await api('/api/admin/overview', { headers: adminHeaders });
+  assert.equal(oldToken.status, 403, 'old admin token invalidated by reset');
+  const newTok = await api('/api/admin/overview', { headers: { 'x-admin-token': reset.body.token } });
+  assert.equal(newTok.status, 200);
+  step('admin reset issues a new token and revokes the old one');
 
   console.log('\nE2E PASSED ✅');
 } catch (e) {

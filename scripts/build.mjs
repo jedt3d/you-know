@@ -6,8 +6,20 @@
 // what wrangler's assets binding expects: dist/client/index.html + assets.
 
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+
+// Build identity shown in the app footer: package version, the git commit
+// being built (short id), and the build timestamp.
+const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+let commit = 'unknown';
+try {
+  commit = execSync('git rev-parse --short HEAD').toString().trim();
+} catch {
+  // not a git checkout (e.g. extracted tarball)
+}
+const buildTime = new Date().toISOString();
 
 const outDir = 'dist/client';
 rmSync(outDir, { recursive: true, force: true });
@@ -26,7 +38,12 @@ await build({
   target: 'es2022',
   legalComments: 'none',
   logLevel: 'info',
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    __APP_VERSION__: JSON.stringify(version),
+    __BUILD_COMMIT__: JSON.stringify(commit),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+  },
 });
 
 const jsHash = createHash('sha256').update(readFileSync(outDir + '/assets/app.js')).digest('hex').slice(0, 10);

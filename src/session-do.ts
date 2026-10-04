@@ -47,6 +47,11 @@ interface SessionData {
 
 type Attachment = { role: 'host' } | { role: 'player'; playerId: string } | null;
 
+/** Slice of the Worker env the DO needs for durable record-keeping. */
+interface D0Env {
+  DB?: D1Database;
+}
+
 const MAX_JOINS_PER_MIN = 60;
 const REVEAL_GRACE_MS = 300; // alarm fires slightly after the buzzer
 
@@ -78,11 +83,32 @@ function validAnswer(q: Question, a: unknown): Answer | null {
 export class SessionDO {
   private data: SessionData | null = null;
 
-  constructor(private ctx: DurableObjectState, _env: unknown) {
+  constructor(private ctx: DurableObjectState, private env: D0Env = {}) {
     // Canned ping/pong responder — liveness checks never wake the DO.
     const S = (globalThis as unknown as Record<string, unknown>).WebSocketRequestResponseSerializer;
     if (typeof S === 'function') {
       this.ctx.setWebSocketAutoResponse(new (S as new (a: string, b: string) => unknown)('{"t":"ping"}', '{"t":"pong"}') as never);
+    }
+  }
+
+  /** Fire-and-forget durable write — recording must never break the game. */
+  private record(sql: string, ...args: unknown[]): void {
+    const db = this.env.DB;
+    if (!db) return;
+    void db
+      .prepare(sql)
+      .bind(...args)
+      .run()
+      .catch((e) => console.error('[record]', (e as Error).message, sql.slice(0, 60)));
+  }
+
+  private recordBatch(sql: string, rows: unknown[][]): void {
+    const db = this.env.DB;
+    if (!db || rows.length === 0) return;
+    const stmts = rows.map((r) => db.prepare(sql).bind(...r));
+    // chunked: D1 caps statements per batch
+    for (let i = 0; i < stmts.length; i += 50) {
+      void db.batch(stmts.slice(i, i + 50)).catch((e) => console.error('[recordBatch]', (e as Error).message));
     }
   }
 
@@ -144,7 +170,7 @@ export class SessionDO {
       if (req.method === 'GET' && url.pathname === '/summary') return json(this.summary());
       if (req.method === 'GET' && url.pathname === '/state') return this.getState(url);
       if (req.method === 'GET' && url.pathname.startsWith('/ws')) return await this.acceptWs(url);
-      if (req.method === 'POST' && url.pathname === '/join') return await this.join(await this.readJson(req));
+      if (req.method === 'POST' && url.pathname === '/join') return await this.join(req);
       if (req.method === 'POST' && url.pathname === '/answer') return await this.answer(await this.readJson(req));
       if (req.method === 'POST' && url.pathname === '/cmd') return await this.command(await this.readJson(req));
       return json({ error: 'bad_route' }, 404);
@@ -191,8 +217,9 @@ export class SessionDO {
 
   // ------------------------------------------------------------ players
 
-  private async join(body: Record<string, unknown>): Promise<Response> {
+  private async join(req: Request): Promise<Response> {
     const d = this.data!;
+    const body = await this.readJson(req);
     if (d.phase === 'ended') return json({ error: 'game_over' }, 410);
     const name = sanitizeName(String(body.name ?? ''));
     if (!name) return json({ error: 'bad_name' }, 400);
@@ -215,8 +242,19 @@ export class SessionDO {
 
     const id = newPlayerId();
     const token = newPlayerToken();
+    const ip = req.headers.get('x-player-ip');
+    const ua = req.headers.get('x-player-ua');
     d.players[id] = { id, name, token, connected: false, score: 0, lastGained: 0, lastCorrect: null, joinedAt: Date.now() };
     await this.changed();
+    this.record(
+      'INSERT INTO players (session_code, player_id, name, ip, user_agent, score, joined_at) VALUES (?, ?, ?, ?, ?, 0, ?)',
+      d.code,
+      id,
+      name,
+      ip,
+      ua,
+      Date.now(),
+    );
     return json({ playerId: id, playerToken: token });
   }
 
@@ -313,11 +351,14 @@ export class SessionDO {
     if (d.phase !== 'question') return;
     const q = d.quiz.questions[d.qIndex];
     const unscored = q.type === 'likert' && !isLikertScored(q);
+    const scoreRows: unknown[][] = [];
+    const answerRows: unknown[][] = [];
     for (const p of Object.values(d.players)) {
       const rec = d.answers[p.id];
       if (unscored) {
         p.lastGained = 0;
         p.lastCorrect = null;
+        if (rec) answerRows.push([d.code, p.id, d.qIndex, JSON.stringify(rec.answer), null, 0, rec.at]);
         continue;
       }
       if (!rec) {
@@ -329,9 +370,22 @@ export class SessionDO {
       p.lastGained = gained;
       p.lastCorrect = gained > 0;
       p.score += gained;
+      scoreRows.push([p.score, d.code, p.id]);
+      answerRows.push([d.code, p.id, d.qIndex, JSON.stringify(rec.answer), gained > 0 ? 1 : 0, gained, rec.at]);
     }
     d.phase = 'reveal';
     await this.changed();
+    // durable record — every answer with its outcome, and the running scores
+    this.recordBatch(
+      'UPDATE players SET score = ? WHERE session_code = ? AND player_id = ?',
+      scoreRows,
+    );
+    this.recordBatch(
+      `INSERT INTO answers (session_code, player_id, q_index, answer, correct, gained, answered_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session_code, player_id, q_index) DO UPDATE SET answer = excluded.answer, correct = excluded.correct, gained = excluded.gained, answered_at = excluded.answered_at`,
+      answerRows,
+    );
   }
 
   private async end(): Promise<void> {
@@ -339,6 +393,7 @@ export class SessionDO {
     d.phase = 'ended';
     await this.changed();
     await this.ctx.storage.deleteAlarm();
+    this.record('UPDATE sessions SET status = ?, ended_at = ? WHERE code = ?', 'ended', Date.now(), d.code);
   }
 
   async alarm(): Promise<void> {

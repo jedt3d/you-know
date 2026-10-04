@@ -1,6 +1,6 @@
 // You Know? — single Worker: REST API + WebSocket upgrade + D1 (quizzes,
-// session registry) + one hibernating SessionDO per live session. Static
-// assets (the SPA build) are served via the ASSETS binding.
+// session registry, admin settings, game records) + one hibernating SessionDO
+// per live session. Static assets (the SPA build) are served via ASSETS.
 
 import { Hono } from 'hono';
 import { SessionDO } from './session-do.ts';
@@ -12,6 +12,8 @@ interface Env {
   DB: D1Database;
   SESSION: DurableObjectNamespace;
   ASSETS: Fetcher;
+  /** Set by the self-host adapter (server/node.ts): the client's IP. */
+  remoteIp?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -20,9 +22,134 @@ const stubFor = (env: Env, code: string) => env.SESSION.get(env.SESSION.idFromNa
 
 app.get('/api/health', (c) => c.text('ok'));
 
+// -------------------------------------------------------------------- admin
+
+// Settings live in D1 (a `settings` key/value table): the admin password as a
+// PBKDF2 hash and the session token issued on setup/login. The client keeps
+// the token in localStorage and sends it as `x-admin-token`.
+
+async function getSetting(env: Env, key: string): Promise<string | null> {
+  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>();
+  return row?.value ?? null;
+}
+
+async function putSetting(env: Env, key: string, value: string): Promise<void> {
+  await env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .bind(key, value)
+    .run();
+}
+
+function hex(buf: ArrayBuffer): string {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashPassword(password: string, saltHex?: string): Promise<string> {
+  const salt = saltHex
+    ? new Uint8Array((saltHex.match(/../g) ?? []).map((h) => parseInt(h, 16)))
+    : crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100_000 }, key, 256);
+  return hex(salt.buffer as ArrayBuffer) + ':' + hex(bits);
+}
+
+function randomToken(): string {
+  return hex(crypto.getRandomValues(new Uint8Array(24)).buffer as ArrayBuffer);
+}
+
+function randomId(len: number): string {
+  return hex(crypto.getRandomValues(new Uint8Array(len)).buffer as ArrayBuffer);
+}
+
+app.get('/api/admin/status', async (c) => {
+  return c.json({ setup: (await getSetting(c.env, 'admin_hash')) === null });
+});
+
+// Set up (first run) or reset (?reset=1) the admin password. Deliberately
+// open per the product decision: a self-hosted app where the URL parameter
+// is the recovery path.
+app.post('/api/admin/password', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const password = String(body?.password ?? '');
+  if (password.length < 8) return c.json({ error: 'weak_password', message: 'Use at least 8 characters.' }, 400);
+  const hash = await hashPassword(password);
+  const token = randomToken();
+  await putSetting(c.env, 'admin_hash', hash);
+  await putSetting(c.env, 'admin_token', token);
+  return c.json({ token });
+});
+
+app.post('/api/admin/login', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  const stored = await getSetting(c.env, 'admin_hash');
+  if (!stored) return c.json({ error: 'setup_required' }, 409);
+  const candidate = await hashPassword(String(body?.password ?? ''), stored.split(':')[0]);
+  if (candidate !== stored) return c.json({ error: 'forbidden' }, 403);
+  // reuse the existing token so other devices stay logged in
+  let token = await getSetting(c.env, 'admin_token');
+  if (!token) {
+    token = randomToken();
+    await putSetting(c.env, 'admin_token', token);
+  }
+  return c.json({ token });
+});
+
+async function requireAdmin(c: any): Promise<Response | null> {
+  const token = c.req.header('x-admin-token') ?? '';
+  const valid = token && (await getSetting(c.env, 'admin_token')) === token;
+  if (!valid) return c.json({ error: 'forbidden' }, 403);
+  return null;
+}
+
+app.get('/api/admin/verify', async (c) => {
+  const denied = await requireAdmin(c);
+  return denied ?? c.json({ ok: true });
+});
+
+/** Everything the admin page shows: quizzes, sessions, players (with IP). */
+app.get('/api/admin/overview', async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const quizzes = await c.env.DB.prepare('SELECT id, title, created_at, updated_at FROM quizzes ORDER BY created_at DESC')
+    .all<{ id: string; title: string; created_at: number; updated_at: number }>();
+  const sessions = await c.env.DB.prepare(`
+    SELECT s.code, s.quiz_id, s.title, s.status, s.created_at, s.ended_at,
+           (SELECT COUNT(*) FROM players p WHERE p.session_code = s.code) AS player_count
+    FROM sessions s ORDER BY s.created_at DESC LIMIT 100`).all();
+  const players = await c.env.DB.prepare(
+    'SELECT session_code, player_id, name, ip, user_agent, score, joined_at FROM players ORDER BY joined_at DESC LIMIT 500',
+  ).all();
+  return c.json({ quizzes: quizzes.results ?? [], sessions: sessions.results ?? [], players: players.results ?? [] });
+});
+
+/** One session in detail: every recorded answer with its outcome. */
+app.get('/api/admin/sessions/:code', async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const code = normalizeCode(c.req.param('code'));
+  const session = await c.env.DB.prepare('SELECT code, quiz_id, title, status, created_at, ended_at FROM sessions WHERE code = ?')
+    .bind(code)
+    .first();
+  if (!session) return c.json({ error: 'not_found' }, 404);
+  const players = await c.env.DB.prepare(
+    'SELECT player_id, name, ip, user_agent, score, joined_at FROM players WHERE session_code = ? ORDER BY score DESC, joined_at',
+  )
+    .bind(code)
+    .all();
+  const answers = await c.env.DB.prepare(
+    `SELECT a.player_id, p.name, a.q_index, a.answer, a.correct, a.gained, a.answered_at
+     FROM answers a LEFT JOIN players p ON p.session_code = a.session_code AND p.player_id = a.player_id
+     WHERE a.session_code = ? ORDER BY a.q_index, a.answered_at`,
+  )
+    .bind(code)
+    .all();
+  return c.json({ session, players: players.results ?? [], answers: answers.results ?? [] });
+});
+
 // ------------------------------------------------------------------ quizzes
 
 app.post('/api/quizzes', async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
   const title = String(body?.title ?? '').trim().slice(0, 120) || 'Untitled quiz';
   const id = quizId();
@@ -120,7 +247,9 @@ app.post('/api/quizzes/:id/sessions', async (c) => {
     if (!res.ok) return c.json({ error: 'create_failed' }, 500);
     const out = (await res.json()) as { hostToken: string };
     created = { code, hostToken: out.hostToken };
-    await c.env.DB.prepare('INSERT INTO sessions (code, quiz_id, created_at) VALUES (?, ?, ?)').bind(code, row.id, Date.now()).run();
+    await c.env.DB.prepare('INSERT INTO sessions (code, quiz_id, created_at, title, status) VALUES (?, ?, ?, ?, ?)')
+      .bind(code, row.id, Date.now(), v.quiz.title, 'live')
+      .run();
   }
   if (!created) return c.json({ error: 'code_collision' }, 500);
 
@@ -143,9 +272,18 @@ app.get('/api/sessions/:code', async (c) => {
 
 app.post('/api/sessions/:code/join', async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>);
+  // Forward where the player came from — the DO writes it to the players table.
+  const fwd: Record<string, string> = { 'content-type': 'application/json' };
+  const ip =
+    c.req.header('cf-connecting-ip') ??
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
+    c.env.remoteIp;
+  if (ip) fwd['x-player-ip'] = ip;
+  const ua = c.req.header('user-agent');
+  if (ua) fwd['x-player-ua'] = ua;
   const res = await stubFor(c.env, normalizeCode(c.req.param('code'))).fetch('https://do/join', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: fwd,
     body: JSON.stringify(body ?? {}),
   });
   return new Response(res.body, { status: res.status, headers: { 'content-type': 'application/json' } });

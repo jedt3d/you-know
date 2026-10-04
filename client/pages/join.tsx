@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { ApiError, getSummary, joinSession, store } from '../api';
 import { nav } from '../state';
-import { Wordmark } from '../ui';
+import { Footer, Wordmark } from '../ui';
 import type { SessionSummary } from '../../shared/types.ts';
 
 export default function Join({ code }: { code: string }) {
@@ -99,6 +99,7 @@ export default function Join({ code }: { code: string }) {
         </button>
         {error && <div class="error">{error}</div>}
       </div>
+      <Footer />
     </div>
   );
 }

@@ -1632,6 +1632,83 @@ select option {
   }
 }
 
+/* ------------------------------------------------------------------ admin */
+
+.app-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.admin-gate {
+  width: min(420px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-link {
+  margin-left: auto;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  cursor: pointer;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.session-row {
+  cursor: pointer;
+}
+
+.session-row:hover td {
+  background: color-mix(in srgb, var(--wb-sage) 14%, transparent);
+}
+
+.session-detail {
+  padding: 8px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-detail .home-list-title {
+  margin-top: 8px;
+}
+
+.ua-cell {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 480px) {
   .answer-grid {
     grid-template-columns: 1fr;

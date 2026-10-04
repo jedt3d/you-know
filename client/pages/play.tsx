@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { ApiError, sendAnswer, store } from '../api';
 import { nav, useConn } from '../state';
-import { Countdown, DistRows, OptionShape, Podium, Standings, Wordmark } from '../ui';
+import { Countdown, DistRows, Footer, OptionShape, Podium, Standings, Wordmark } from '../ui';
 import type { SessionStateView } from '../../shared/types.ts';
 
 function Redirect({ to }: { to: string }) {
@@ -141,6 +141,7 @@ export default function Play({ code }: { code: string }) {
           </div>
         </div>
       )}
+      <Footer />
     </div>
   );
 }

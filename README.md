@@ -18,8 +18,16 @@ free tier** (one Worker + D1 + hibernating Durable Objects).
 - **Host-paced** — questions advance when *you* click; pauses are free
 - **No accounts** — your secret edit link is your login; each session gets a
   host link + 6-character join code + QR
+- **Password-protected admin** — creating quizzes and the recorded-data view
+  sit behind an admin password (set it on first run; add `?reset=1` to the
+  URL to reset it — intentionally open, self-host convenience)
+- **Every game recorded** — sessions, players (IP + user agent), per-question
+  answers with outcomes, and scores are written to the database (D1 on
+  Cloudflare is SQLite; the self-host server writes plain SQLite)
 - **Editing locks while a quiz is live**, unlocks when the game ends
 - **One quiz, many sessions** — re-host the same quiz as often as you like
+- **Version footer** — every page shows the app version, the git commit it
+  was built from, and the build timestamp
 
 ## Quick start (local)
 

@@ -4,6 +4,7 @@ import Join from './pages/join';
 import Play from './pages/play';
 import Host from './pages/host';
 import Edit from './pages/edit';
+import { AdminPage } from './admin';
 import { Wordmark } from './ui';
 
 export default function App() {
@@ -24,6 +25,8 @@ export default function App() {
       return <Host code={seg[1] ?? ''} hostToken={params.get('h') ?? ''} quizId={params.get('q') ?? ''} />;
     case 'edit':
       return <Edit id={seg[1] ?? ''} token={params.get('token') ?? ''} />;
+    case 'admin':
+      return <AdminPage />;
     default:
       return (
         <div class="center-page">

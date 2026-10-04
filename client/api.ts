@@ -54,7 +54,75 @@ export interface JoinResult {
   rejoined?: boolean;
 }
 
-export const createQuiz = (title: string) => api<CreatedQuiz>('/api/quizzes', { method: 'POST', body: JSON.stringify({ title }) });
+export const createQuiz = (title: string, adminToken: string) =>
+  api<CreatedQuiz>('/api/quizzes', { method: 'POST', headers: { 'x-admin-token': adminToken }, body: JSON.stringify({ title }) });
+
+// ------------------------------------------------------------------- admin
+
+export interface AdminStatus {
+  setup: boolean; // true = no password set yet (first run)
+}
+
+export interface AdminQuizRow {
+  id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AdminSessionRow {
+  code: string;
+  quiz_id: string;
+  title: string;
+  status: string;
+  created_at: number;
+  ended_at: number | null;
+  player_count: number;
+}
+
+export interface AdminPlayerRow {
+  session_code: string;
+  player_id: string;
+  name: string;
+  ip: string | null;
+  user_agent: string | null;
+  score: number;
+  joined_at: number;
+}
+
+export interface AdminAnswerRow {
+  player_id: string;
+  name: string | null;
+  q_index: number;
+  answer: string;
+  correct: number | null;
+  gained: number;
+  answered_at: number;
+}
+
+export interface AdminOverview {
+  quizzes: AdminQuizRow[];
+  sessions: AdminSessionRow[];
+  players: AdminPlayerRow[];
+}
+
+export interface AdminSessionDetail {
+  session: AdminSessionRow;
+  players: AdminPlayerRow[];
+  answers: AdminAnswerRow[];
+}
+
+const authHeaders = (token: string): Record<string, string> => ({ 'x-admin-token': token });
+
+export const adminStatus = () => api<AdminStatus>('/api/admin/status');
+export const adminSetPassword = (password: string) =>
+  api<{ token: string }>('/api/admin/password', { method: 'POST', body: JSON.stringify({ password }) });
+export const adminLogin = (password: string) =>
+  api<{ token: string }>('/api/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
+export const adminVerify = (token: string) => api<{ ok: true }>('/api/admin/verify', { headers: authHeaders(token) });
+export const adminOverview = (token: string) => api<AdminOverview>('/api/admin/overview', { headers: authHeaders(token) });
+export const adminSessionDetail = (token: string, code: string) =>
+  api<AdminSessionDetail>(`/api/admin/sessions/${code}`, { headers: authHeaders(token) });
 export const getQuiz = (id: string, token: string) => api<QuizView>(`/api/quizzes/${id}?token=${encodeURIComponent(token)}`);
 export const saveQuiz = (id: string, token: string, quiz: { title: string; questions: Question[] }) =>
   api<{ ok: true; savedAt: number; title: string }>(`/api/quizzes/${id}`, { method: 'PUT', body: JSON.stringify({ token, quiz }) });
@@ -138,5 +206,20 @@ export const store = {
   setPlayer(code: string, p: PlayerRef | null) {
     if (p) save(`yk-player-${code}`, p);
     else localStorage.removeItem(`yk-player-${code}`);
+  },
+  adminToken: (): string | null => {
+    try {
+      return localStorage.getItem('yk-admin-token');
+    } catch {
+      return null;
+    }
+  },
+  setAdminToken(token: string | null) {
+    try {
+      if (token) localStorage.setItem('yk-admin-token', token);
+      else localStorage.removeItem('yk-admin-token');
+    } catch {
+      // private mode etc.
+    }
   },
 };
