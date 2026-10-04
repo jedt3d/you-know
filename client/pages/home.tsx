@@ -1,28 +1,51 @@
-// Home — join a game by code (open to everyone), or host: the management
-// area is password-protected (AdminGate) and lists everything on the server,
-// so every signed-in admin browser sees the same quizzes and sessions.
-// First run sets the password; `?reset=1` in the URL opens the reset form.
+// Home — join a game by code (open to everyone) or host. Admin lives only
+// at /admin: if this device holds a verified admin token the Host card shows
+// the server-side lists and creates quizzes directly; otherwise "Create a
+// quiz" takes you to /admin to sign in first.
 
 import { useEffect, useState } from 'preact/hooks';
-import { adminOverview, createQuiz, type AdminOverview } from '../api';
+import { adminOverview, adminVerify, createQuiz, store, type AdminOverview } from '../api';
 import { nav } from '../state';
-import { AdminGate } from '../admin';
 import { Footer, Wordmark } from '../ui';
 
 export default function Home() {
+  const [token, setToken] = useState<string | null | undefined>(undefined); // undefined = checking
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
+
+  useEffect(() => {
+    const t = store.adminToken();
+    if (!t) {
+      setToken(null);
+      return;
+    }
+    adminVerify(t)
+      .then(() => setToken(t))
+      .catch(() => {
+        store.setAdminToken(null);
+        setToken(null);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    adminOverview(token)
+      .then(setOverview)
+      .catch(() => setOverview(null));
+  }, [token]);
+
+  const signOut = () => {
+    store.setAdminToken(null);
+    setToken(null);
+    setOverview(null);
+  };
+
   return (
     <div class="page page-home">
       <Wordmark />
       <p class="tagline">Live quiz for your talk — players join with a code or QR.</p>
       <JoinCard />
-      <AdminGate>
-        {(token, signOut) => (
-          <>
-            <HostCard token={token} />
-            <Footer signOut={signOut} />
-          </>
-        )}
-      </AdminGate>
+      <HostCard token={token} overview={overview} />
+      <Footer signOut={token ? signOut : undefined} />
     </div>
   );
 }
@@ -65,22 +88,25 @@ function JoinCard() {
   );
 }
 
-function HostCard({ token }: { token: string }) {
+function HostCard({
+  token,
+  overview,
+}: {
+  token: string | null | undefined;
+  overview: AdminOverview | null;
+}) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
-  const [data, setData] = useState<AdminOverview | null>(null);
 
-  const load = () =>
-    adminOverview(token)
-      .then(setData)
-      .catch(() => setData(null));
-
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  const signedIn = !!token;
+  const quizzes = overview?.quizzes ?? [];
+  const sessions = overview?.sessions ?? [];
 
   const host = async () => {
+    if (!token) {
+      nav('/admin'); // admin lives only here — sign in, then come back
+      return;
+    }
     setCreating(true);
     setError('');
     try {
@@ -92,23 +118,19 @@ function HostCard({ token }: { token: string }) {
     }
   };
 
-  const quizzes = data?.quizzes ?? [];
-  const sessions = data?.sessions ?? [];
-
   return (
     <div class="card host-card">
-      <div class="qrow">
-        <div class="card-title">Host</div>
-        <a class="home-row-sub admin-link" href="#/admin">
-          Recorded data →
-        </a>
+      <div class="card-title">Host</div>
+      <p class="muted" style="margin: 0; font-size: var(--size-meta, 0.75rem);">
+        Create a quiz, then go live and project it.
+      </p>
+      <div>
+        <button class="btn btn-secondary" disabled={creating} onClick={host}>
+          {creating ? 'Creating…' : signedIn ? 'Create a quiz' : 'Create a quiz — sign in'}
+        </button>
       </div>
-      <p class="muted small">Create a quiz, then go live and project it.</p>
-      <button class="btn btn-secondary" disabled={creating} onClick={host}>
-        {creating ? 'Creating…' : 'Create a quiz'}
-      </button>
 
-      {quizzes.length > 0 && (
+      {signedIn && quizzes.length > 0 && (
         <div class="home-list">
           <div class="home-list-title">All quizzes ({quizzes.length})</div>
           {quizzes.map((q) => (
@@ -122,7 +144,7 @@ function HostCard({ token }: { token: string }) {
         </div>
       )}
 
-      {sessions.length > 0 && (
+      {signedIn && sessions.length > 0 && (
         <div class="home-list">
           <div class="home-list-title">Sessions ({sessions.length})</div>
           {sessions.map((s) => (

@@ -49,7 +49,7 @@ export default function Host({ code, hostToken, quizId }: { code: string; hostTo
       const qr = qrcode(0, 'M');
       qr.addData(joinUrl);
       qr.make();
-      return qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }).replace(/black/g, '#26343D');
+      return qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }).replace(/black/g, '#17181A');
     } catch {
       return '';
     }
@@ -174,7 +174,9 @@ export default function Host({ code, hostToken, quizId }: { code: string; hostTo
               <div class="host-options">
                 {(s.question.options ?? []).map((o, i) => (
                   <div class="host-option" key={i}>
-                    <OptionShape index={i} />
+                    <span class={`answer-shape opt-${(i % 4) + 1}`}>
+                      <OptionShape index={i} fg />
+                    </span>
                     <span>{o}</span>
                   </div>
                 ))}

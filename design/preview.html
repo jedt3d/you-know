@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>You Know? — design preview (tokens test drive)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500&family=Questrial&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   TOKENS — mirrored from design/tokens.json v1.1.0 (user-adjusted)
+   The Token panel (bottom-right) edits these live; overrides
+   persist in this browser and can be exported back to tokens.json
+   ============================================================ */
+:root {
+  --color-canvas: #ffffff;
+  --color-surface: #ededed;
+  --color-card: #FFFFFF;
+  --color-accent: #0a89ff;
+  --color-on-accent: #FFFFFF;
+  --color-dark: #4A4D51;
+  --color-dark-glass: #3F444B;
+  --color-ink: #17181A;
+  --color-muted: #565f6c;
+  --color-faint: #C7CACD;
+  --color-dot: #d1d1d1;
+  --color-hatch: #EFEEF1;
+  --color-opt-red: #EA4335;
+  --color-opt-yellow: #FBBC05;
+  --color-opt-green: #34A853;
+  --color-overlay: rgba(38, 41, 46, 0.45);
+  --color-skeleton: rgba(255, 255, 255, 0.60);
+  --connector-opacity: 0.55;
+
+  --font: 'Questrial', 'Poppins', 'Century Gothic', Futura, system-ui, sans-serif;
+  --w-light: 300; --w-reg: 400; --w-med: 500;
+  --size-display: 46px; --size-number: 38px; --size-title: 28px;
+  --size-node: 16px; --size-body: 14px; --size-meta: 12px; --size-micro: 11px;
+  --lh-display: 1.1; --lh-body: 1.5;
+
+  --r-pill: 999px; --r-lg: 26px; --r-card: 37px; --r-sm: 20px; --r-thumb: 17px;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
+
+  --shadow-card: 0 8px 24px rgba(23, 25, 28, 0.06);
+  --shadow-float: 0 4px 12px rgba(23, 25, 28, 0.12);
+
+  --icon-stroke: 1.5;
+  --circle-sm: 36px; --circle-md: 44px; --circle-lg: 56px;
+
+  --dur-fast: 150ms; --dur: 220ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font);
+  font-weight: var(--w-reg);
+  font-size: var(--size-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input { font: inherit; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+a { color: inherit; }
+
+/* ------------------------------------------------ top chrome */
+.topnav {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-6);
+  background: color-mix(in srgb, var(--color-canvas) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+.wordmark { font-size: var(--size-title); font-weight: var(--w-med); letter-spacing: -0.02em; }
+.wordmark b { color: var(--color-accent); font-weight: inherit; }
+.pillnav { display: flex; gap: var(--sp-2); margin-left: auto; flex-wrap: wrap; }
+.pill {
+  border-radius: var(--r-pill);
+  padding: 10px 22px;
+  background: var(--color-card);
+  color: var(--color-muted);
+  font-size: var(--size-body);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.pill:hover { transform: scale(1.03); }
+.pill.active { background: var(--color-dark); color: #fff; }
+.preview-note {
+  margin: var(--sp-2) var(--sp-6) 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--color-card));
+  color: var(--color-muted);
+  font-size: var(--size-meta);
+}
+.preview-note b { color: var(--color-ink); font-weight: var(--w-med); }
+
+/* ------------------------------------------------ layout */
+main { padding: var(--sp-6); display: grid; gap: var(--sp-8); max-width: 1180px; margin: 0 auto; }
+.screen { display: none; }
+.screen.active { display: block; }
+.screen-title { font-size: var(--size-display); font-weight: var(--w-reg); line-height: var(--lh-display); margin: 0 0 var(--sp-2); }
+.screen-sub { color: var(--color-muted); margin: 0 0 var(--sp-6); }
+.gallery { display: grid; gap: var(--sp-6); }
+.gallery-row { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+h3.group { font-size: var(--size-meta); font-weight: var(--w-med); text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-muted); margin: var(--sp-8) 0 var(--sp-3); }
+h3.group:first-child { margin-top: 0; }
+
+/* ------------------------------------------------ primitives */
+.card {
+  background: var(--color-card);
+  border-radius: var(--r-card);
+  padding: var(--sp-4);
+  box-shadow: var(--shadow-card);
+}
+.chip {
+  display: inline-block; border-radius: var(--r-pill);
+  padding: 5px 14px; font-size: var(--size-meta);
+  background: var(--color-surface); color: var(--color-muted);
+}
+.chip.on-dark { background: rgba(255,255,255,0.14); color: #fff; }
+.chip.status-live { background: var(--color-accent); color: var(--color-on-accent); }
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-pill);
+  background: var(--color-accent); color: var(--color-on-accent);
+  font-size: 10px; font-weight: var(--w-med);
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  border-radius: var(--r-pill); padding: 12px 26px;
+  font-size: var(--size-body); font-weight: var(--w-reg);
+  transition: transform var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease);
+}
+.btn:active { transform: scale(0.96); }
+.btn.accent { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.dark { background: var(--color-dark); color: #fff; }
+.btn.ghost { background: var(--color-card); color: var(--color-muted); box-shadow: var(--shadow-card); }
+.btn.lg { padding: 14px 34px; font-size: var(--size-node); }
+.icon-circle {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-pill); flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.icon-circle:hover { transform: scale(1.06); }
+.icon-circle.sm { width: var(--circle-sm); height: var(--circle-sm); }
+.icon-circle.md { width: var(--circle-md); height: var(--circle-md); }
+.icon-circle.lg { width: var(--circle-lg); height: var(--circle-lg); }
+.icon-circle.accent { background: var(--color-accent); color: var(--color-on-accent); }
+.icon-circle.opt-red { background: var(--color-opt-red); color: #fff; }
+.icon-circle.opt-yellow { background: var(--color-opt-yellow); color: var(--color-ink); }
+.icon-circle.opt-green { background: var(--color-opt-green); color: #fff; }
+.icon-circle.neutral { background: var(--color-card); color: var(--color-ink); box-shadow: var(--shadow-float); }
+.icon-circle.on-accent { background: var(--color-card); color: var(--color-accent); }
+.icon-circle.on-dark { background: var(--color-card); color: var(--color-dark-glass); }
+.icon-circle svg { width: 20px; height: 20px; }
+.muted { color: var(--color-muted); }
+.micro { font-size: var(--size-micro); color: var(--color-muted); }
+
+/* ------------------------------------------------ home */
+.home-grid { display: grid; gap: var(--sp-6); grid-template-columns: minmax(280px, 380px) 1fr; align-items: start; }
+.field-label { display: block; font-size: var(--size-meta); letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-muted); margin: var(--sp-2) 0; }
+.code-input {
+  width: 100%; text-align: center; letter-spacing: 0.3em; text-transform: uppercase;
+  font-size: 22px; padding: 14px; border: none; border-radius: var(--r-pill);
+  background: var(--color-surface); color: var(--color-ink); outline: none;
+}
+.code-input:focus { box-shadow: 0 0 0 2px var(--color-accent); }
+.stack { display: grid; gap: var(--sp-3); }
+.row-item {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%; text-align: left;
+  background: var(--color-surface); border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-4);
+  transition: background var(--dur-fast) var(--ease);
+}
+.row-item:hover { background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)); }
+.row-item .grow { flex: 1; min-width: 0; }
+.row-item .t { font-size: var(--size-node); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list-title { font-size: var(--size-micro); letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-muted); margin: var(--sp-4) 0 var(--sp-2); }
+.section-head { display: flex; align-items: baseline; gap: var(--sp-3); }
+.section-head .link { margin-left: auto; font-size: var(--size-meta); color: var(--color-muted); text-decoration: underline; text-decoration-color: var(--color-accent); cursor: pointer; }
+
+/* ------------------------------------------------ player (phone) */
+.phone {
+  width: 390px; margin: 0 auto; border-radius: 44px;
+  border: 6px solid var(--color-ink); background: var(--color-surface);
+  padding: var(--sp-4); min-height: 640px; display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.phone .p-head { display: flex; align-items: center; gap: var(--sp-2); }
+.phone .p-head .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-muted); }
+.phone .p-head .mono { font-weight: var(--w-med); color: var(--color-ink); }
+.stat-chip { background: var(--color-card); border-radius: var(--r-pill); padding: 4px 12px; font-size: var(--size-meta); box-shadow: var(--shadow-card); }
+.countdown { height: 8px; border-radius: var(--r-pill); background: var(--color-dot); overflow: hidden; }
+.countdown i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--color-accent); }
+.countdown.danger i { background: var(--color-dark); }
+.prompt { font-size: var(--size-title); font-weight: var(--w-reg); text-align: center; margin: var(--sp-2) 0; }
+.answer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.answer {
+  display: flex; align-items: center; gap: var(--sp-3); text-align: left;
+  background: var(--color-card); border-radius: var(--r-card); padding: var(--sp-3);
+  box-shadow: var(--shadow-card); font-size: var(--size-body);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.answer:hover { transform: scale(1.02); }
+.answer:active { transform: scale(0.96); }
+.answer .grow { flex: 1; }
+.answer.tf { justify-content: center; min-height: 76px; font-size: var(--size-node); letter-spacing: 0.06em; }
+.answer.tf.true { background: var(--color-opt-green); color: #fff; }
+.answer.tf.false { background: var(--color-opt-red); color: #fff; }
+.likert-row { display: flex; gap: var(--sp-3); justify-content: center; }
+.likert {
+  width: 52px; height: 52px; border-radius: var(--r-pill);
+  background: var(--color-card); box-shadow: var(--shadow-card);
+  font-size: var(--size-node); color: var(--color-ink);
+  transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.likert:hover { transform: scale(1.08); background: color-mix(in srgb, var(--color-accent) 10%, var(--color-card)); }
+.short-row { display: flex; gap: var(--sp-3); }
+.short-row input {
+  flex: 1; border: none; border-radius: var(--r-pill); background: var(--color-card);
+  box-shadow: var(--shadow-card); padding: 12px 20px; outline: none; text-align: center;
+}
+.short-row input:focus { box-shadow: 0 0 0 2px var(--color-accent); }
+.locked-in { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); padding: var(--sp-4); font-size: var(--size-node); }
+
+/* reveal banners */
+.banner { border-radius: var(--r-card); padding: var(--sp-6); text-align: center; background: var(--color-card); box-shadow: var(--shadow-card); }
+.banner.good { box-shadow: 0 0 0 2px var(--color-accent), var(--shadow-card); }
+.banner.good .bt { color: var(--color-accent); }
+.banner .bt { font-size: var(--size-title); font-weight: var(--w-med); }
+.banner.bad .bt { color: var(--color-muted); }
+
+/* distribution */
+.dist { display: grid; gap: var(--sp-3); }
+.dist-row { display: grid; grid-template-columns: 34% 1fr 36px; align-items: center; gap: var(--sp-3); }
+.dist-label { font-size: var(--size-body); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; }
+.dist-label .ok { color: var(--color-accent); font-weight: var(--w-med); }
+.dist-track { height: 18px; border-radius: var(--r-pill); background: var(--color-dot); overflow: hidden; }
+.dist-bar { height: 100%; border-radius: var(--r-pill); background: var(--color-dark); transition: width var(--dur) var(--ease); }
+.dist-row.correct .dist-bar { background: var(--color-accent); }
+.dist-count { text-align: right; color: var(--color-muted); }
+
+/* standings + podium */
+.standing { display: flex; align-items: center; gap: var(--sp-3); background: var(--color-card); border-radius: var(--r-sm); padding: 10px var(--sp-4); box-shadow: var(--shadow-card); }
+.standing .rank { width: 28px; text-align: center; color: var(--color-muted); }
+.standing .nm { flex: 1; font-size: var(--size-node); }
+.standing.me { box-shadow: 0 0 0 2px var(--color-accent), var(--shadow-card); }
+.standing .sc { font-weight: var(--w-med); }
+.podium { display: flex; align-items: flex-end; justify-content: center; gap: var(--sp-3); }
+.pod { display: grid; gap: var(--sp-1); text-align: center; width: 110px; }
+.pod .base { border-radius: var(--r-sm) var(--r-sm) 6px 6px; background: var(--color-card); box-shadow: var(--shadow-card); display: flex; align-items: center; justify-content: center; font-size: var(--size-title); color: var(--color-muted); }
+.pod.p1 .base { height: 96px; background: var(--color-accent); color: var(--color-on-accent); }
+.pod.p2 .base { height: 68px; }
+.pod.p3 .base { height: 48px; }
+.pod .pn { font-size: var(--size-body); }
+.pod .ps { font-size: var(--size-meta); color: var(--color-muted); }
+
+/* ------------------------------------------------ host (projector) */
+.projector {
+  border: 6px solid var(--color-ink); border-radius: 40px;
+  background: var(--color-surface); padding: var(--sp-6); min-height: 560px;
+  display: grid; gap: var(--sp-6); align-content: start;
+}
+.proj-head { display: flex; align-items: center; gap: var(--sp-3); }
+.proj-head .mid { flex: 1; text-align: center; color: var(--color-muted); }
+.host-lobby { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: var(--sp-6); align-items: center; }
+.lobby-card { text-align: center; display: grid; gap: var(--sp-3); justify-items: center; }
+.lobby-pin { font-size: var(--size-number); font-weight: var(--w-light); letter-spacing: 0.14em; color: var(--color-accent); }
+.lobby-url { font-size: var(--size-meta); color: var(--color-muted); }
+.qr-box { background: var(--color-card); border-radius: var(--r-thumb); padding: var(--sp-3); box-shadow: var(--shadow-card); line-height: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
+.player-chip { background: var(--color-card); border-radius: var(--r-pill); padding: 7px 18px; box-shadow: var(--shadow-card); font-size: var(--size-body); }
+.host-prompt { font-size: 32px; font-weight: var(--w-reg); text-align: center; margin: var(--sp-2) 0; }
+.host-options { display: flex; flex-wrap: wrap; gap: var(--sp-3); justify-content: center; }
+.host-option { display: flex; align-items: center; gap: var(--sp-2); background: var(--color-card); border-radius: var(--r-pill); padding: 10px 22px; box-shadow: var(--shadow-card); font-size: var(--size-node); }
+.controls { display: flex; gap: var(--sp-3); justify-content: center; flex-wrap: wrap; }
+.reveal-correct { text-align: center; font-size: var(--size-node); color: var(--color-muted); }
+.reveal-correct b { color: var(--color-ink); font-weight: var(--w-med); text-decoration: underline; text-decoration-color: var(--color-accent); text-decoration-thickness: 3px; text-underline-offset: 6px; font-size: var(--size-title); }
+
+/* ------------------------------------------------ admin */
+table.admin { width: 100%; border-collapse: collapse; font-size: var(--size-body); }
+table.admin th { text-align: left; font-size: var(--size-micro); font-weight: var(--w-med); letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-muted); padding: 8px 10px; border-bottom: 1px solid var(--color-dot); }
+table.admin td { padding: 9px 10px; border-bottom: 1px solid color-mix(in srgb, var(--color-dot) 60%, transparent); vertical-align: top; }
+table.admin tr:last-child td { border-bottom: none; }
+table.admin a { text-decoration: underline; text-decoration-color: var(--color-accent); }
+.del { color: var(--color-muted); }
+.del:hover { color: var(--color-ink); }
+
+/* ------------------------------------------------ footer */
+.app-footer { margin: var(--sp-8) 0 var(--sp-6); text-align: center; font-size: var(--size-micro); color: var(--color-muted); }
+.app-footer .footer-link { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: var(--color-accent); }
+
+/* ------------------------------------------------ token panel */
+.token-fab {
+  position: fixed; right: 18px; bottom: 18px; z-index: 60;
+  border-radius: var(--r-pill); padding: 10px 18px;
+  background: var(--color-dark); color: #fff; box-shadow: var(--shadow-float);
+  font-size: var(--size-meta);
+}
+.token-panel {
+  position: fixed; right: 18px; bottom: 64px; z-index: 60; width: 300px;
+  background: var(--color-card); border-radius: var(--r-card); box-shadow: 0 12px 40px rgba(23,25,28,0.25);
+  padding: var(--sp-4); display: none; max-height: 70vh; overflow: auto;
+}
+.token-panel.open { display: block; }
+.token-panel h4 { margin: 0 0 var(--sp-2); font-size: var(--size-body); font-weight: var(--w-med); }
+.token-panel .t-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 4px 0; font-size: var(--size-meta); }
+.token-panel input[type="color"] { width: 40px; height: 26px; border: none; background: none; padding: 0; cursor: pointer; }
+.token-panel input[type="range"] { width: 120px; accent-color: var(--color-accent); }
+.token-panel select { border: 1px solid var(--color-dot); border-radius: 10px; padding: 3px 6px; background: var(--color-card); }
+.token-panel .t-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
+.token-panel .t-actions button { border-radius: var(--r-pill); padding: 7px 12px; background: var(--color-surface); font-size: var(--size-micro); }
+.token-panel .t-actions button.primary { background: var(--color-accent); color: #fff; }
+.modified-dot { display: none; width: 8px; height: 8px; border-radius: 999px; background: var(--color-accent); }
+.modified .modified-dot { display: inline-block; }
+</style>
+</head>
+<body>
+
+<header class="topnav">
+  <span class="wordmark">You Know<b>?</b></span>
+  <nav class="pillnav" id="tabs">
+    <button class="pill active" data-tab="home">Home</button>
+    <button class="pill" data-tab="join">Join</button>
+    <button class="pill" data-tab="play">Play</button>
+    <button class="pill" data-tab="host">Host</button>
+    <button class="pill" data-tab="admin">Admin</button>
+  </nav>
+</header>
+<div class="preview-note"><b>Design preview</b> — tokens from <b>design/tokens.json v1.2.0</b> applied to the You Know? screens. Not the real app. Tweak with the <b>Tokens</b> panel (bottom-right); overrides persist in this browser and export back to tokens.json.</div>
+
+<main>
+
+  <!-- ============================== HOME -->
+  <section class="screen active" data-screen="home">
+    <h1 class="screen-title">Live quiz for your talk</h1>
+    <p class="screen-sub">Players join with a code or QR — host runs it from the projector.</p>
+    <div class="home-grid">
+      <div class="card stack">
+        <label class="field-label">Game PIN</label>
+        <input class="code-input" value="UDY6CM" maxlength="6" />
+        <button class="btn accent lg">Join</button>
+      </div>
+      <div class="card stack">
+        <div class="section-head">
+          <span style="font-size: var(--size-title); font-weight: var(--w-med);">Host</span>
+        </div>
+        <p class="muted" style="margin: 0; font-size: var(--size-meta);">Create a quiz, then go live and project it.</p>
+        <div><button class="btn dark">Create a quiz</button></div>
+        <div class="list-title">All quizzes (3)</div>
+        <button class="row-item"><span class="grow"><span class="t">Editor Flow Quiz</span></span><span class="micro">Edit</span></button>
+        <button class="row-item"><span class="grow"><span class="t">Best CLIs — talk opener</span></span><span class="micro">Edit</span></button>
+        <button class="row-item"><span class="grow"><span class="t">Team pulse — offsite</span></span><span class="micro">Edit</span></button>
+        <div class="list-title">Sessions (2)</div>
+        <button class="row-item">
+          <span class="grow"><span class="t"><b>UDY6CM</b> — Editor Flow Quiz</span></span>
+          <span class="chip status-live">live</span>
+        </button>
+        <button class="row-item">
+          <span class="grow"><span class="t"><b>BK3TSW</b> — Editor Flow Quiz</span></span>
+          <span class="chip">ended</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== JOIN -->
+  <section class="screen" data-screen="join">
+    <h1 class="screen-title">Join a game</h1>
+    <p class="screen-sub">Enter the code, pick a name, play from your phone.</p>
+    <div class="phone">
+      <span class="wordmark" style="text-align:center">You Know<b>?</b></span>
+      <div class="card stack" style="text-align:center">
+        <div class="muted" style="font-size: var(--size-meta)">Game PIN <b style="color:var(--color-accent); letter-spacing:0.1em">UDY6CM</b></div>
+        <div style="font-size: var(--size-node)">Editor Flow Quiz</div>
+        <div class="chip" style="justify-self:center">Already in progress — you can still jump in!</div>
+        <label class="field-label">Nickname</label>
+        <input class="code-input" value="Worajedt" style="font-size: var(--size-node); letter-spacing: 0.02em;" />
+        <button class="btn accent lg">Let's go</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== PLAY -->
+  <section class="screen" data-screen="play">
+    <h1 class="screen-title">Player screens</h1>
+    <p class="screen-sub">All four question types, lock-in, reveal outcomes, results — in a phone frame.</p>
+    <div class="gallery">
+
+      <h3 class="group">Question — multiple choice</h3>
+      <div class="phone">
+        <div class="p-head">
+          <span class="mono">UDY6CM</span><span>· Editor Flow Quiz</span>
+          <span class="grow"></span>
+          <span class="stat-chip">0 pts</span><span class="stat-chip">#1</span>
+        </div>
+        <div class="countdown"><i style="width: 72%"></i></div>
+        <div class="micro" style="text-align:center; letter-spacing:0.12em">QUESTION 1 OF 4</div>
+        <div class="prompt">Best language for CLIs?</div>
+        <div class="answer-grid">
+          <button class="answer"><span class="icon-circle md accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 4 21 20 H3 Z"/></svg></span><span class="grow">Rust</span></button>
+          <button class="answer"><span class="icon-circle md opt-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3 21 12 12 21 3 12Z"/></svg></span><span class="grow">Go</span></button>
+          <button class="answer"><span class="icon-circle md opt-yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/></svg></span><span class="grow">Bash</span></button>
+          <button class="answer"><span class="icon-circle md opt-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/></svg></span><span class="grow">Python</span></button>
+        </div>
+      </div>
+
+      <h3 class="group">True / false · Likert · Short answer</h3>
+      <div class="phone">
+        <div class="prompt">Love me love my dogs?</div>
+        <div class="answer-grid">
+          <button class="answer tf true">TRUE</button>
+          <button class="answer tf false">FALSE</button>
+        </div>
+        <div class="micro" style="text-align:center; letter-spacing:0.12em; margin-top: var(--sp-4)">LIKERT — CATS LIKE YOU?</div>
+        <div class="likert-row">
+          <button class="likert">1</button><button class="likert">2</button><button class="likert">3</button><button class="likert">4</button><button class="likert">5</button>
+        </div>
+        <div class="likert-row micro"><span>Nah..</span><span>They purr</span><span>They bite</span></div>
+        <div class="micro" style="text-align:center; letter-spacing:0.12em; margin-top: var(--sp-4)">SHORT ANSWER</div>
+        <div class="short-row">
+          <input value="because love" />
+          <button class="icon-circle lg accent" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+        <div class="locked-in"><span class="icon-circle sm accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span> Locked in</div>
+      </div>
+
+      <h3 class="group">Reveal — outcomes</h3>
+      <div class="phone">
+        <div class="banner good pop"><div class="bt">Correct! +1,000</div><div class="muted" style="font-size: var(--size-meta)">Total 1,000 · rank #1</div></div>
+        <div class="banner bad"><div class="bt">Not this time</div><div class="muted" style="font-size: var(--size-meta)">Answer: <b>Go</b> · total 0</div></div>
+        <div class="banner"><div class="bt" style="font-size: var(--size-node)">You said 4</div><div class="muted" style="font-size: var(--size-meta)">Unscored pulse poll — no points</div></div>
+      </div>
+
+      <h3 class="group">Distribution &amp; results</h3>
+      <div class="phone">
+        <div class="card stack">
+          <div class="dist">
+            <div class="dist-row"><span class="dist-label">Rust</span><span class="dist-track"><span class="dist-bar" style="width: 45%"></span></span><span class="dist-count">1</span></div>
+            <div class="dist-row correct"><span class="dist-label"><span class="ok">✓</span> Go</span><span class="dist-track"><span class="dist-bar" style="width: 90%"></span></span><span class="dist-count">2</span></div>
+            <div class="dist-row"><span class="dist-label">Bash</span><span class="dist-track"><span class="dist-bar" style="width: 0%"></span></span><span class="dist-count">0</span></div>
+            <div class="dist-row"><span class="dist-label">Python</span><span class="dist-track"><span class="dist-bar" style="width: 0%"></span></span><span class="dist-count">0</span></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="standing me"><span class="rank">1</span><span class="nm">Worajedt</span><span class="sc">1,000</span></div>
+          <div class="standing"><span class="rank">2</span><span class="nm">Visual Check</span><span class="sc">0</span></div>
+        </div>
+        <div class="podium">
+          <div class="pod p2"><span class="pn">Visual Check</span><span class="ps">0</span><span class="base">2</span></div>
+          <div class="pod p1"><span class="pn">Worajedt</span><span class="ps">1,000</span><span class="base">1</span></div>
+          <div class="pod p3"><span class="pn">Carol</span><span class="ps">0</span><span class="base">3</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== HOST -->
+  <section class="screen" data-screen="host">
+    <h1 class="screen-title">Host projector</h1>
+    <p class="screen-sub">Lobby, live question, reveal and final podium — wide frame.</p>
+    <div class="gallery">
+      <h3 class="group">Lobby</h3>
+      <div class="projector">
+        <div class="proj-head">
+          <span class="wordmark">You Know<b>?</b></span>
+          <span class="mid"><b style="color:var(--color-ink)">UDY6CM</b> · Editor Flow Quiz</span>
+          <span class="chip status-live">LIVE</span>
+        </div>
+        <div class="host-lobby">
+          <div class="card lobby-card">
+            <span class="chip">Join the game</span>
+            <span class="lobby-url">you-know.workers.dev/#/join</span>
+            <div class="lobby-pin">UDY6CM</div>
+            <div class="qr-box"><canvas id="qr" width="132" height="132"></canvas></div>
+          </div>
+          <div class="stack">
+            <div style="text-align:center; font-size: var(--size-title)">2 players ready</div>
+            <div class="chips">
+              <span class="player-chip">Worajedt</span>
+              <span class="player-chip">Visual Check</span>
+            </div>
+            <div class="controls">
+              <button class="btn accent lg">Start</button>
+              <button class="btn dark lg">End game</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="group">Live question &amp; reveal</h3>
+      <div class="projector">
+        <div class="proj-head">
+          <span class="wordmark">You Know<b>?</b></span>
+          <span class="mid"><b style="color:var(--color-ink)">UDY6CM</b> · Editor Flow Quiz</span>
+          <span class="chip status-live">LIVE</span>
+        </div>
+        <div class="countdown"><i style="width: 55%"></i></div>
+        <div class="host-prompt">Best language for CLIs?</div>
+        <div class="host-options">
+          <span class="host-option"><span class="icon-circle sm accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 4 21 20 H3 Z"/></svg></span> Rust</span>
+          <span class="host-option"><span class="icon-circle sm opt-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3 21 12 12 21 3 12Z"/></svg></span> Go</span>
+          <span class="host-option"><span class="icon-circle sm opt-yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/></svg></span> Bash</span>
+          <span class="host-option"><span class="icon-circle sm opt-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4.5" y="4.5" width="15" height="15" rx="2"/></svg></span> Python</span>
+        </div>
+        <div class="micro" style="text-align:center">1 of 2 answered</div>
+        <div class="reveal-correct">Answer: <b>Go</b></div>
+        <div class="card" style="max-width: 560px; margin: 0 auto; width: 100%;">
+          <div class="dist">
+            <div class="dist-row"><span class="dist-label">Rust</span><span class="dist-track"><span class="dist-bar" style="width: 33%"></span></span><span class="dist-count">1</span></div>
+            <div class="dist-row correct"><span class="dist-label"><span class="ok">✓</span> Go</span><span class="dist-track"><span class="dist-bar" style="width: 66%"></span></span><span class="dist-count">2</span></div>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn accent lg">Next question</button>
+          <button class="btn dark lg">Finish</button>
+        </div>
+      </div>
+
+      <h3 class="group">Ended</h3>
+      <div class="projector" style="justify-items: center">
+        <div style="font-size: var(--size-display); font-weight: var(--w-reg)">That's a wrap!</div>
+        <div class="podium">
+          <div class="pod p2"><span class="pn">Visual Check</span><span class="ps">2,962</span><span class="base">2</span></div>
+          <div class="pod p1"><span class="pn">Alice</span><span class="ps">5,000</span><span class="base">1</span></div>
+          <div class="pod p3"><span class="pn">Carol</span><span class="ps">2,000</span><span class="base">3</span></div>
+        </div>
+        <div class="controls"><button class="btn ghost lg">Home</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== ADMIN -->
+  <section class="screen" data-screen="admin">
+    <h1 class="screen-title">Admin — recorded data</h1>
+    <p class="screen-sub">Quizzes, sessions, players with IP — everything the DO writes to the database.</p>
+    <div class="gallery">
+      <div class="card">
+        <div class="section-head"><span style="font-weight: var(--w-med)">Quizzes (3)</span></div>
+        <table class="admin">
+          <thead><tr><th>Title</th><th>ID</th><th>Created</th><th>Updated</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><a href="#">Editor Flow Quiz</a></td><td class="micro">FAaMGmydsuz9</td><td class="micro">Oct 5, 2026</td><td class="micro">Oct 5, 2026</td><td><button class="del" title="Delete quiz">✕</button></td></tr>
+            <tr><td><a href="#">Best CLIs — talk opener</a></td><td class="micro">K8dNQw2rTvx0</td><td class="micro">Oct 4, 2026</td><td class="micro">Oct 4, 2026</td><td><button class="del" title="Delete quiz">✕</button></td></tr>
+            <tr><td><a href="#">Team pulse — offsite</a></td><td class="micro">Pq3WmZ9fRn2A</td><td class="micro">Oct 2, 2026</td><td class="micro">Oct 3, 2026</td><td><button class="del" title="Delete quiz">✕</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="section-head"><span style="font-weight: var(--w-med)">Sessions (2)</span></div>
+        <table class="admin">
+          <thead><tr><th>Code</th><th>Quiz</th><th>Status</th><th>Players</th><th>Started</th><th>Ended</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><b>UDY6CM</b></td><td>Editor Flow Quiz</td><td><span class="chip status-live">live</span></td><td>2</td><td class="micro">Oct 5, 3:23 PM</td><td class="micro">—</td><td><a href="#" class="micro">▶ host</a> · <button class="del" title="Delete session">✕</button></td></tr>
+            <tr><td><b>BK3TSW</b></td><td>Editor Flow Quiz</td><td><span class="chip">ended</span></td><td>3</td><td class="micro">Oct 4, 9:10 AM</td><td class="micro">Oct 4, 9:40 AM</td><td><a href="#" class="micro">▶ host</a> · <button class="del" title="Delete session">✕</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="section-head"><span style="font-weight: var(--w-med)">Recent joins (4)</span></div>
+        <table class="admin">
+          <thead><tr><th>Session</th><th>Name</th><th>Score</th><th>IP</th><th>User agent</th><th>Joined</th></tr></thead>
+          <tbody>
+            <tr><td class="micro">UDY6CM</td><td>Worajedt</td><td>1,000</td><td class="micro">86.51.14.203</td><td class="micro">iPhone · Safari 18</td><td class="micro">3:24 PM</td></tr>
+            <tr><td class="micro">UDY6CM</td><td>Visual Check</td><td>0</td><td class="micro">86.51.14.203</td><td class="micro">Chrome 141 · macOS</td><td class="micro">3:24 PM</td></tr>
+            <tr><td class="micro">BK3TSW</td><td>Alice</td><td>5,000</td><td class="micro">112.21.44.8</td><td class="micro">Android · Chrome 140</td><td class="micro">9:12 AM</td></tr>
+            <tr><td class="micro">BK3TSW</td><td>Bob</td><td>3,962</td><td class="micro">112.21.44.9</td><td class="micro">iPhone · Safari 18</td><td class="micro">9:13 AM</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  <button class="footer-link">Sign out</button> ·
+  <span>v0.2.2-preview</span> · build <span>preview</span> · 2026-10-05
+</footer>
+
+<button class="token-fab" id="tokenFab">Tokens</button>
+<div class="token-panel" id="tokenPanel">
+  <h4>Design tokens <span class="modified-dot" title="Modified from tokens.json v1.0.0"></span></h4>
+  <div id="tokenRows"></div>
+  <div class="t-actions">
+    <button class="primary" id="tExport">Download tokens.json</button>
+    <button id="tCopy">Copy CSS vars</button>
+    <button id="tReset">Reset</button>
+  </div>
+  <p class="micro" style="margin: 8px 0 0">Edits persist in this browser. Export and send me the file — I'll confirm it in the change log and apply it to the real app.</p>
+</div>
+
+<script>
+/* ------------------------------------------------ tabs */
+const tabs = document.getElementById('tabs');
+tabs.addEventListener('click', (e) => {
+  const b = e.target.closest('.pill'); if (!b) return;
+  tabs.querySelectorAll('.pill').forEach((p) => p.classList.toggle('active', p === b));
+  document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.dataset.screen === b.dataset.tab));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+/* ------------------------------------------------ fake QR (deterministic) */
+(function qr() {
+  const c = document.getElementById('qr'); if (!c) return;
+  const ctx = c.getContext('2d');
+  const N = 21, S = c.width / N;
+  let seed = 42;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = '#17181A';
+  const finder = (x, y) => {
+    ctx.fillRect(x * S, y * S, 7 * S, 7 * S);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect((x + 1) * S, (y + 1) * S, 5 * S, 5 * S);
+    ctx.fillStyle = '#17181A'; ctx.fillRect((x + 2) * S, (y + 2) * S, 3 * S, 3 * S);
+  };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (rnd() > 0.52) ctx.fillRect(x * S, y * S, S, S);
+  finder(0, 0); finder(N - 7, 0); finder(0, N - 7);
+})();
+
+/* ------------------------------------------------ token editor */
+const BASE = {
+  '--color-canvas': '#ffffff', '--color-surface': '#ededed', '--color-card': '#FFFFFF',
+  '--color-accent': '#0a89ff', '--color-dark': '#4A4D51', '--color-dark-glass': '#3F444B',
+  '--color-ink': '#17181A', '--color-muted': '#565f6c', '--color-faint': '#C7CACD',
+  '--color-dot': '#d1d1d1', '--color-hatch': '#EFEEF1',
+  '--color-opt-red': '#EA4335', '--color-opt-yellow': '#FBBC05', '--color-opt-green': '#34A853',
+  '--r-card': 37, '--r-lg': 26, '--r-thumb': 17,
+  '--size-display': 46, '--size-number': 38, '--size-title': 28,
+  '--connector-opacity': 0.55, '--shadow-alpha': 0.06,
+  '--font': 'Questrial',
+};
+const COLOR_DEFS = [
+  ['--color-canvas', 'Canvas'], ['--color-surface', 'App surface'], ['--color-card', 'Card'],
+  ['--color-accent', 'Accent'], ['--color-dark', 'Dark surface'], ['--color-dark-glass', 'Dark glass'],
+  ['--color-ink', 'Text'], ['--color-muted', 'Muted text'], ['--color-faint', 'Faint text'],
+  ['--color-dot', 'Idle dots'], ['--color-hatch', 'Hatch stripes'],
+  ['--color-opt-red', 'Choice red'], ['--color-opt-yellow', 'Choice yellow'], ['--color-opt-green', 'Choice green'],
+];
+const RANGE_DEFS = [
+  ['--r-card', 'Radius · card', 4, 40], ['--r-lg', 'Radius · large card', 8, 56],
+  ['--r-thumb', 'Radius · thumbnail', 4, 28],
+  ['--size-display', 'Display size', 32, 60], ['--size-number', 'Number size', 28, 56], ['--size-title', 'Title size', 16, 28],
+  ['--connector-opacity', 'Connector opacity', 0, 1], ['--shadow-alpha', 'Card shadow', 0, 0.2],
+];
+const FONT_DEFS = ['Poppins', 'Questrial', 'Century Gothic', 'system-ui'];
+
+const KEY = 'yk-preview-tokens';
+let overrides = {};
+try { overrides = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch {}
+let modified = Object.keys(overrides).length > 0;
+
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function apply(key, val) {
+  const r = document.documentElement.style;
+  if (key === '--shadow-alpha') {
+    r.setProperty('--shadow-card', `0 8px 24px rgba(23,25,28,${val})`);
+    r.setProperty('--shadow-float', `0 4px 12px rgba(23,25,28,${Math.min(val * 2, 0.4)})`);
+  } else if (key === '--font') {
+    r.setProperty('--font', `'${val}', 'Century Gothic', Futura, system-ui, sans-serif`);
+  } else if (key.startsWith('--color-')) {
+    r.setProperty(key, val);
+    if (key === '--color-accent') r.setProperty('--connector-opacity', overrides['--connector-opacity'] ?? BASE['--connector-opacity']);
+  } else {
+    r.setProperty(key, key.startsWith('--r') ? val + 'px' : key === '--connector-opacity' ? val : val + 'px');
+  }
+}
+function applyAll() {
+  for (const [k, v] of Object.entries(overrides)) apply(k, v);
+  document.getElementById('tokenFab').classList.toggle('modified', modified);
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(overrides)); modified = Object.keys(overrides).length > 0; applyAll(); }
+
+const rows = document.getElementById('tokenRows');
+for (const [k, label] of COLOR_DEFS) {
+  const row = document.createElement('div'); row.className = 't-row';
+  row.innerHTML = `<span>${label}</span><input type="color" data-k="${k}" value="${overrides[k] || BASE[k]}">`;
+  rows.appendChild(row);
+}
+for (const [k, label, min, max] of RANGE_DEFS) {
+  const row = document.createElement('div'); row.className = 't-row';
+  row.innerHTML = `<span>${label}</span><input type="range" data-k="${k}" min="${min}" max="${max}" step="${k === '--connector-opacity' || k === '--shadow-alpha' ? 0.01 : 1}" value="${overrides[k] ?? BASE[k]}">`;
+  rows.appendChild(row);
+}
+const fontRow = document.createElement('div'); fontRow.className = 't-row';
+fontRow.innerHTML = `<span>Font</span><select data-k="--font">${FONT_DEFS.map((f) => `<option ${((overrides['--font'] || BASE['--font']) === f ? 'selected' : '')}>${f}</option>`).join('')}</select>`;
+rows.appendChild(fontRow);
+
+rows.addEventListener('input', (e) => {
+  const k = e.target.dataset.k; if (!k) return;
+  let v = e.target.value;
+  if (e.target.type === 'range') v = parseFloat(v);
+  overrides[k] = v; save();
+});
+rows.addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') { overrides[e.target.dataset.k] = e.target.value; save(); } });
+
+document.getElementById('tokenFab').addEventListener('click', () => document.getElementById('tokenPanel').classList.toggle('open'));
+document.getElementById('tReset').addEventListener('click', () => { overrides = {}; localStorage.removeItem(KEY); location.reload(); });
+document.getElementById('tCopy').addEventListener('click', async () => {
+  const css = Object.entries({ ...BASE, ...overrides }).map(([k, v]) => `  ${k}: ${typeof v === 'number' ? v : JSON.stringify(v).replace(/"/g, '')};`).join('\n');
+  try { await navigator.clipboard.writeText(':root {\n' + css + '\n}'); alert('CSS variables copied'); } catch { alert(css); }
+});
+document.getElementById('tExport').addEventListener('click', () => {
+  const out = { ...BASE, ...overrides };
+  const json = {
+    name: 'EHR Design System', version: '1.2.0-draft', updated: new Date().toISOString().slice(0, 10),
+    color: {
+      canvas: out['--color-canvas'], surface: out['--color-surface'], card: out['--color-card'],
+      accent: out['--color-accent'], onAccent: '#FFFFFF',
+      darkSurface: out['--color-dark'], darkSurfaceGlass: out['--color-dark-glass'],
+      text: { primary: out['--color-ink'], muted: out['--color-muted'], faint: out['--color-faint'] },
+      dot: out['--color-dot'], hatch: out['--color-hatch'],
+      overlay: 'rgba(38, 41, 46, 0.45)', skeleton: 'rgba(255, 255, 255, 0.60)',
+      connector: { value: out['--color-accent'], opacity: out['--connector-opacity'] },
+      choice: {
+        blue: out['--color-accent'], red: out['--color-opt-red'],
+        yellow: out['--color-opt-yellow'], yellowIcon: out['--color-ink'],
+        green: out['--color-opt-green'], true: out['--color-opt-green'], false: out['--color-opt-red'],
+      },
+    },
+    typography: { family: `${out['--font']}, 'Century Gothic', Futura, system-ui, sans-serif` },
+    radius: { card: out['--r-card'] + 'px', cardLg: out['--r-lg'] + 'px', thumb: out['--r-thumb'] + 'px' },
+    elevation: { card: `0 8px 24px rgba(23, 25, 28, ${out['--shadow-alpha']})` },
+    overridesFromV100: Object.keys(overrides),
+  };
+  const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'tokens.json'; a.click();
+});
+applyAll();
+</script>
+</body>
+</html>

@@ -33,16 +33,18 @@ edge punctuation (keeps Thai/Japanese combining marks intact).
 
 ## Visual identity
 
-The UI follows the [WBasic design identity](https://jedt3d.github.io/wbasic-documents/en/books/design-identity/):
-five colors only — Tungsten charcoal `#26343D`, Deep teal `#237F83`, Mist
-`#F3F6F4`, Sage `#B9CEC4`, Warm sand `#D9C5A4` — IBM Plex Sans / Sans Thai /
-Sans JP for interface text and IBM Plex Mono for join codes and the PIN.
-Light mode is the default (Mist surface); dark mode flips to Charcoal
-surfaces with Mist text and Sage accents (theme toggle, persisted, system
-preference on first visit). Multiple-choice options cycle the four
-non-surface colors (Teal, Sand, Sage, Charcoal — the 4th becomes Mist in
-dark); shapes and labels keep the distinction so color never has to speak
-alone. Correct/wrong feedback uses written headings and weight, not red/green.
+The UI is styled by the token system in [design/tokens.json](../design/tokens.json)
+(v1.2.0 — documented with a change log in
+[design/design-system.md](../design/design-system.md), playground at
+`design/preview.html`): white canvas, gray app surface (`#EDEDED`), white
+cards with soft shadows, azure accent `#0A89FF`, dark charcoal `#4A4D51`,
+and Google-hued choice colors (blue = accent, red `#EA4335`, yellow `#FBBC05`
+with an ink icon, green `#34A853` — True/False buttons use green/red).
+Type is Questrial (Poppins + Noto Sans Thai/JP fallbacks, self-hosted);
+hierarchy comes from size, never bold. Radii: cards 37, large 26, small 20,
+thumbnails 17, buttons/inputs pill. Light-only by design — a dark theme
+requires a deliberate dark token set first. Admin is reachable only at
+`/admin`; the home page stays public.
 
 ## Architecture
 

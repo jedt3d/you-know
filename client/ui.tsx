@@ -1,26 +1,8 @@
 // Shared presentational components: wordmark, answer shapes, countdown,
-// result distribution, standings, podium and the light/dark theme toggle.
+// result distribution, standings and podium.
 
 import { useEffect, useState } from 'preact/hooks';
 import type { PlayerPublic, RevealView } from '../shared/types.ts';
-
-/** Light ↔ dark toggle (WBasic identity: Mist-first, Charcoal dark mode). */
-export function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() =>
-    document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
-  );
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('yk-theme', theme);
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#26343D' : '#F3F6F4');
-  }, [theme]);
-  return (
-    <button class="theme-toggle" type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-      {theme === 'dark' ? 'Light theme' : 'Dark theme'}
-    </button>
-  );
-}
 
 export function Wordmark({ small }: { small?: boolean }) {
   return (
@@ -35,9 +17,8 @@ export function Wordmark({ small }: { small?: boolean }) {
   );
 }
 
-// Answer options cycle the four non-surface identity colors (Teal, Sand,
-// Sage, Charcoal on light; the 4th swaps to Mist in dark). CSS vars so the
-// same code serves both themes; shapes double the distinction.
+// Answer options: Google hues at our tone (design tokens v1.2.0) — blue is
+// the accent; shapes keep options distinguishable so color never speaks alone.
 export const OPTION_COLORS = ['var(--opt-1-bg)', 'var(--opt-2-bg)', 'var(--opt-3-bg)', 'var(--opt-4-bg)'];
 
 type Shape = 'triangle' | 'diamond' | 'circle' | 'square' | 'star' | 'bolt';

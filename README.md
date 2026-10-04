@@ -5,10 +5,10 @@ talk: run a bunch of questions, present, run another bunch. Players join from
 their phones with a short code or QR. Deploys entirely on the **Cloudflare
 free tier** (one Worker + D1 + hibernating Durable Objects).
 
-- **WBasic design identity** — the five identity colors (Tungsten charcoal,
-  Deep teal, Mist, Sage, Warm sand), IBM Plex Sans / Sans Thai / Sans JP type
-  and IBM Plex Mono for codes, with a light ↔ dark theme toggle (light is
-  the reading default; dark flips to Charcoal surfaces with Sage accents)
+- **Design system v1.2.0** ([design/tokens.json](design/tokens.json)) — white
+  canvas, gray app surface, white cards with soft shadows, azure accent
+  `#0A89FF`, Google-hued choice colors, green/red true-false, Questrial type
+  (hierarchy by size, never bold), light-only
 - **4 question types** — multiple choice (identity-colored shapes), true/false,
   short answer (normalized matching, every accepted answer counts, or tick
   accept-any to score any non-empty answer), Likert poll (unscored, or mark
@@ -127,10 +127,10 @@ tests/      unit tests + full-game E2E
 
 ## Notes & quirks
 
-- Visual design follows the [WBasic design identity](https://jedt3d.github.io/wbasic-documents/en/books/design-identity/):
-  five colors, IBM Plex families, calm surfaces, color never speaking alone
-  (correct/wrong carries a written heading, not just a hue). Fonts are
-  self-hosted from `@fontsource` (latin + thai + japanese subsets, woff2 only).
+- Visual design follows the token system in [design/tokens.json](design/tokens.json)
+  (documented in [design/design-system.md](design/design-system.md), with a
+  change log and a live playground at `design/preview.html`). Fonts are
+  self-hosted from `@fontsource` (Questrial, Poppins, Noto Sans Thai/JP).
 - The project folder name contains a `?` (YouKnow?) — vite/rolldown and
   vitest treat that as a URL query separator, so the client build uses
   esbuild directly and unit tests run on Node's native TypeScript support.
