@@ -360,12 +360,101 @@ try {
   assert.equal(ov4.body.sessions.find((s) => s.code === s2.body.code), undefined, 'session row removed');
   assert.equal(ov4.body.players.filter((p) => p.session_code === s2.body.code).length, 0, 'session players removed');
 
-  // now the quiz has no live session — delete succeeds and cascades
+  // now the quiz has no live session — delete succeeds and cascades.
+  // (Question-image round-trip below runs first: quiz delete also 404s images.)
+  const webpBytes = (n) => {
+    const u = new Uint8Array(n);
+    u.set([0x52, 0x49, 0x46, 0x46], 0); // RIFF
+    u.set([0x57, 0x45, 0x42, 0x50], 8); // WEBP
+    return u;
+  };
+  const q2edit = q2.body.editToken;
+  const imgHeaders = { 'content-type': 'image/webp', 'x-edit-token': q2edit };
+
+  const imgNoAuth = await api(`/api/quizzes/${q2.body.id}/images?w=320&h=240`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/webp' },
+    body: webpBytes(64),
+  });
+  assert.equal(imgNoAuth.status, 403, 'image upload requires the edit token');
+
+  const badMagic = await api(`/api/quizzes/${q2.body.id}/images?w=320&h=240`, {
+    method: 'POST',
+    headers: { 'content-type': 'image/webp', 'x-edit-token': q2edit },
+    body: new Uint8Array(Buffer.from('pretend this is a picture')),
+  });
+  assert.equal(badMagic.status, 400, 'non-image bytes rejected');
+
+  const tooBig = await api(`/api/quizzes/${q2.body.id}/images?w=320&h=240`, {
+    method: 'POST',
+    headers: imgHeaders,
+    body: webpBytes(600 * 1024),
+  });
+  assert.equal(tooBig.status, 413, 'oversize image rejected');
+
+  const up1 = await api(`/api/quizzes/${q2.body.id}/images?w=320&h=240`, { method: 'POST', headers: imgHeaders, body: webpBytes(64) });
+  assert.equal(up1.status, 200, 'upload ok');
+  assert.ok(up1.body.id && up1.body.url === `/api/images/${up1.body.id}`);
+
+  const served = await fetch(`${BASE}/api/images/${up1.body.id}`);
+  assert.equal(served.status, 200);
+  assert.equal(served.headers.get('content-type'), 'image/webp');
+  assert.match(served.headers.get('cache-control') ?? '', /immutable/);
+
+  const savedWithImage = await api(`/api/quizzes/${q2.body.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      token: q2edit,
+      quiz: {
+        title: 'Deletable',
+        questions: [{ id: 'd1', type: 'truefalse', prompt: 'P?', answer: true, timeLimitSec: 10, image: { id: up1.body.id, width: 320, height: 240 } }],
+      },
+    }),
+  });
+  assert.equal(savedWithImage.status, 200, 'save with image ref');
+  const bogusRef = await api(`/api/quizzes/${q2.body.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      token: q2edit,
+      quiz: {
+        title: 'Deletable',
+        questions: [{ id: 'd1', type: 'truefalse', prompt: 'P?', answer: true, timeLimitSec: 10, image: { id: 'nope123nope', width: 320, height: 240 } }],
+      },
+    }),
+  });
+  assert.equal(bogusRef.status, 400, 'unknown image reference rejected');
+
+  // prune-on-save: an uploaded but unreferenced image is cleaned up
+  const up2 = await api(`/api/quizzes/${q2.body.id}/images?w=100&h=80`, { method: 'POST', headers: imgHeaders, body: webpBytes(64) });
+  assert.equal(up2.status, 200);
+  const reSave = await api(`/api/quizzes/${q2.body.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      token: q2edit,
+      quiz: {
+        title: 'Deletable',
+        questions: [{ id: 'd1', type: 'truefalse', prompt: 'P?', answer: true, timeLimitSec: 10, image: { id: up1.body.id, width: 320, height: 240 } }],
+      },
+    }),
+  });
+  assert.equal(reSave.status, 200);
+  const prunedEarly = await fetch(`${BASE}/api/images/${up2.body.id}`);
+  assert.equal(prunedEarly.status, 404, 'unreferenced image pruned by the save');
+  const keptEarly = await fetch(`${BASE}/api/images/${up1.body.id}`);
+  assert.equal(keptEarly.status, 200, 'referenced image survives the prune');
   const delQuiz = await api(`/api/quizzes/${q2.body.id}`, { method: 'DELETE', headers: adminHeaders });
   assert.equal(delQuiz.status, 200);
   const ov5 = await api('/api/admin/overview', { headers: adminHeaders });
   assert.equal(ov5.body.quizzes.find((q) => q.id === q2.body.id), undefined, 'quiz removed');
   step('admin: tokens exposed, live-guard 409, session+quiz delete cascade');
+
+  // origin checks after the delete (cache-busting: the earlier GETs are
+  // legitimately pinned in the edge cache as immutable)
+  const pruned = await fetch(`${BASE}/api/images/${up2.body.id}?cb=${Date.now()}`);
+  assert.equal(pruned.status, 404, 'unreferenced image pruned');
+  const kept = await fetch(`${BASE}/api/images/${up1.body.id}?cb=${Date.now()}`);
+  assert.equal(kept.status, 404, 'referenced image deleted with its quiz');
+  step('images: auth+caps enforced, serve cached, prune-on-save, cascade');
 
   // 12c. any admin browser can open the editor + host screen (server-side links)
   const quiz1row = ov5.body.quizzes.find((q) => q.id === id);

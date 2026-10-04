@@ -2,7 +2,7 @@
 // (instant feedback). Everything out of range is clamped or rejected so a
 // quiz snapshot stored in a session DO is always safe to render.
 
-import type { Question, Quiz } from './types.ts';
+import type { Question, QuestionImage, Quiz } from './types.ts';
 
 export const LIMITS = {
   titleMin: 1,
@@ -40,6 +40,18 @@ function clampTime(x: unknown): number {
   return Math.min(Math.max(n, LIMITS.timeMin), LIMITS.timeMax);
 }
 
+/** Shape-check the optional image reference (ownership is verified server-side). */
+function cleanImage(x: unknown): { image?: QuestionImage } {
+  if (!x || typeof x !== 'object') return {};
+  const r = x as Record<string, unknown>;
+  const id = typeof r.id === 'string' ? r.id.slice(0, 40) : '';
+  const width = Math.round(Number(r.width));
+  const height = Math.round(Number(r.height));
+  if (!id || !Number.isFinite(width) || !Number.isFinite(height)) return {};
+  if (width < 1 || width > 4096 || height < 1 || height > 4096) return {};
+  return { image: { id, width, height } };
+}
+
 export function validateQuiz(id: string, raw: unknown): ValidationResult {
   const errors: string[] = [];
   const r = (raw ?? {}) as Record<string, unknown>;
@@ -57,7 +69,7 @@ export function validateQuiz(id: string, raw: unknown): ValidationResult {
     const prompt = str(q.prompt, LIMITS.promptMax);
     if (!prompt) errors.push(`${where}: prompt is empty.`);
     const timeLimitSec = clampTime(q.timeLimitSec);
-    const base = { id: str(q.id, 40) || `q${i}`, prompt, timeLimitSec };
+    const base = { id: str(q.id, 40) || `q${i}`, prompt, timeLimitSec, ...cleanImage(q.image) };
 
     switch (q.type) {
       case 'choice': {

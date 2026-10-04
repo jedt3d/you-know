@@ -12,7 +12,7 @@ import { dirname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { WebSocketServer } from 'ws';
-import { openDb, makeD1, SessionNamespace } from './shims.ts';
+import { openDb, makeD1, makeImageStore, SessionNamespace } from './shims.ts';
 import { normalizeCode } from '../src/ids.ts';
 
 // @ts-ignore -- worker-typed module; identical runtime shape under the shims
@@ -28,6 +28,7 @@ mkdirSync(dirname(DB_PATH), { recursive: true });
 const db = openDb(DB_PATH);
 console.log(`[you-know] db at ${DB_PATH}`);
 
+const imagesDir = process.env.YK_IMAGES_DIR ?? join(dirname(DB_PATH), 'images');
 const sessions = new SessionNamespace(db);
 
 // ---------------------------------------------------------- static assets
@@ -69,6 +70,7 @@ const env = {
   DB: makeD1(db),
   SESSION: sessions,
   ASSETS: { fetch: (req: Request) => serveAsset(req) },
+  IMAGES: makeImageStore(imagesDir),
 };
 
 // ------------------------------------------------------------- http + ws

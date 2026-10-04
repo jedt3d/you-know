@@ -101,6 +101,15 @@ export default function Play({ code }: { code: string }) {
             Question {s.questionIndex + 1} of {s.questionCount}
           </div>
           <Countdown nowFn={() => conn.serverNow()} startedAt={s.questionStartedAt} limitSec={s.question.timeLimitSec} />
+          {s.question.image && (
+            <img
+              class="q-image q-image-live"
+              src={`/api/images/${s.question.image.id}`}
+              width={s.question.image.width}
+              height={s.question.image.height}
+              alt=""
+            />
+          )}
           <div class="play-prompt">{s.question.prompt}</div>
 
           {you?.answered ? (
@@ -116,6 +125,15 @@ export default function Play({ code }: { code: string }) {
 
       {s.phase === 'reveal' && you && (
         <div class="play-body center">
+          {s.question?.image && (
+            <img
+              class="q-image q-image-live"
+              src={`/api/images/${s.question.image.id}`}
+              width={s.question.image.width}
+              height={s.question.image.height}
+              alt=""
+            />
+          )}
           <RevealFeedback s={s} />
           {s.reveal && (
             <div class="card dist-card">

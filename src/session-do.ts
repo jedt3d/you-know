@@ -558,6 +558,7 @@ export class SessionDO {
         type: q.type,
         prompt: q.prompt,
         timeLimitSec: q.timeLimitSec,
+        ...(q.image ? { image: q.image } : {}),
         ...(q.type === 'choice' ? { options: q.options } : {}),
         ...(q.type === 'likert' ? { likertMin: q.likertMin, likertMax: q.likertMax, likertLabels: q.likertLabels } : {}),
       };

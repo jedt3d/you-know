@@ -32,5 +32,13 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SessionDO"] }],
 
+  // Question images (binary). Free tier: 10GB storage, zero egress.
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "you-know-images"
+    }
+  ],
+
   "observability": { "enabled": true }
 }

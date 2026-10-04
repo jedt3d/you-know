@@ -3,6 +3,7 @@
 // model — the server never issues accounts.
 
 import type { Question, Quiz, SessionSummary } from '../shared/types.ts';
+import type { PreparedImage } from './image';
 
 export class ApiError extends Error {
   constructor(
@@ -129,6 +130,25 @@ export const deleteQuiz = (token: string, id: string) =>
   api<{ ok: true; deletedSessions: number }>(`/api/quizzes/${id}`, { method: 'DELETE', headers: authHeaders(token) });
 export const deleteSession = (token: string, code: string) =>
   api<{ ok: true }>(`/api/sessions/${code}`, { method: 'DELETE', headers: authHeaders(token) });
+
+// ------------------------------------------------------------------- images
+
+export interface UploadedImage {
+  id: string;
+  width: number;
+  height: number;
+  url: string;
+}
+
+export const uploadImage = (quizId: string, editToken: string, image: PreparedImage) =>
+  api<UploadedImage>(`/api/quizzes/${quizId}/images?w=${image.width}&h=${image.height}`, {
+    method: 'POST',
+    headers: { 'content-type': image.mime, 'x-edit-token': editToken },
+    body: image.blob,
+  });
+
+export const deleteImage = (quizId: string, editToken: string, imageId: string) =>
+  api<{ ok: true }>(`/api/quizzes/${quizId}/images/${imageId}`, { method: 'DELETE', headers: { 'x-edit-token': editToken } });
 export const getQuiz = (id: string, token: string) => api<QuizView>(`/api/quizzes/${id}?token=${encodeURIComponent(token)}`);
 export const saveQuiz = (id: string, token: string, quiz: { title: string; questions: Question[] }) =>
   api<{ ok: true; savedAt: number; title: string }>(`/api/quizzes/${id}`, { method: 'PUT', body: JSON.stringify({ token, quiz }) });

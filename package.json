@@ -1,7 +1,7 @@
 {
   "name": "you-know",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "npm run build && wrangler dev",
@@ -9,7 +9,7 @@
     "build:server": "node scripts/build-server.mjs",
     "start": "node dist/server/server.mjs",
     "check": "tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "node --test tests/scoring.test.ts tests/text.test.ts tests/validate.test.ts",
+    "test": "node --test tests/scoring.test.ts tests/text.test.ts tests/validate.test.ts tests/image.test.ts",
     "e2e": "node tests/e2e-ws.mjs",
     "db:migrate:local": "wrangler d1 migrations apply you-know --local",
     "db:migrate": "wrangler d1 migrations apply you-know --remote",

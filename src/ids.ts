@@ -23,6 +23,8 @@ export const hostToken = () => pick(ID_CHARS, 32);
 export const playerToken = () => pick(ID_CHARS, 24);
 /** Player id (public within a session). */
 export const playerId = () => pick(ID_CHARS, 10);
+/** Question image id (public in its serving URL). */
+export const imageId = () => pick(ID_CHARS, 16);
 
 export function normalizeCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);

@@ -9,6 +9,8 @@
 //  - storage.setAlarm      → setTimeout (+ persisted timestamp, re-armed on boot)
 
 import Database from 'better-sqlite3';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // The DO class is written against workers-types ambient globals; at runtime
 // it is plain JS shaped exactly like our shim expects.
@@ -44,6 +46,17 @@ export function openDb(path: string): Database.Database {
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS images (
+      id         TEXT PRIMARY KEY,
+      quiz_id    TEXT NOT NULL,
+      mime       TEXT NOT NULL,
+      bytes      INTEGER NOT NULL,
+      width      INTEGER NOT NULL,
+      height     INTEGER NOT NULL,
+      sha256     TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_images_quiz ON images(quiz_id);
     CREATE TABLE IF NOT EXISTS players (
       session_code TEXT NOT NULL,
       player_id    TEXT NOT NULL,
@@ -112,6 +125,33 @@ export function makeD1(db: Database.Database) {
       const results = [];
       for (const s of statements) results.push(await s.run());
       return results;
+    },
+  };
+}
+
+// ------------------------------------------------------- image store (R2 shim)
+
+/** R2Bucket-shaped store backed by the filesystem — the self-host twin of the
+ *  Cloudflare R2 binding. Keys look like `images/<id>`; files land flat under
+ *  the images dir with `/` folded to `_`. */
+export function makeImageStore(dir: string) {
+  mkdirSync(dir, { recursive: true });
+  const fileFor = (key: string) => join(dir, key.replace(/[^A-Za-z0-9._-]/g, '_'));
+  return {
+    async put(key: string, value: Uint8Array): Promise<void> {
+      writeFileSync(fileFor(key), value);
+    },
+    async get(key: string): Promise<{ body: Uint8Array } | null> {
+      const file = fileFor(key);
+      if (!existsSync(file)) return null;
+      return { body: new Uint8Array(readFileSync(file)) };
+    },
+    async delete(key: string): Promise<void> {
+      try {
+        rmSync(fileFor(key));
+      } catch {
+        // already gone
+      }
     },
   };
 }

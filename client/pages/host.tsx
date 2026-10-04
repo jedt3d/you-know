@@ -169,6 +169,15 @@ export default function Host({ code, hostToken, quizId }: { code: string; hostTo
               Question {s.questionIndex + 1} of {s.questionCount}
             </div>
             <Countdown nowFn={() => conn.serverNow()} startedAt={s.questionStartedAt} limitSec={s.question.timeLimitSec} />
+            {s.question.image && (
+              <img
+                class="q-image q-image-live"
+                src={`/api/images/${s.question.image.id}`}
+                width={s.question.image.width}
+                height={s.question.image.height}
+                alt=""
+              />
+            )}
             <div class="host-prompt">{s.question.prompt}</div>
             {s.question.type === 'choice' && (
               <div class="host-options">
@@ -209,6 +218,15 @@ export default function Host({ code, hostToken, quizId }: { code: string; hostTo
       {s.phase === 'reveal' && s.reveal && (
         <>
           <div class="host-reveal">
+            {s.question?.image && (
+              <img
+                class="q-image q-image-live"
+                src={`/api/images/${s.question.image.id}`}
+                width={s.question.image.width}
+                height={s.question.image.height}
+                alt=""
+              />
+            )}
             {s.reveal.correctLabel && (
               <div class="reveal-correct pop-in">
                 Answer: <b>{s.reveal.correctLabel}</b>

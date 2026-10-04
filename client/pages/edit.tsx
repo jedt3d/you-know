@@ -3,8 +3,9 @@
 // a banner. The edit URL itself is the host's only "login".
 
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { ApiError, getQuiz, saveQuiz, startSession, store } from '../api';
+import { ApiError, deleteImage, getQuiz, saveQuiz, startSession, store, uploadImage } from '../api';
 import { nav } from '../state';
+import { prepareImage } from '../image';
 import { validateQuiz } from '../../shared/validate.ts';
 import type { Question, Quiz } from '../../shared/types.ts';
 import { OptionShape, Wordmark } from '../ui';
@@ -231,7 +232,7 @@ export default function Edit({ id, token }: { id: string; token: string }) {
 
       <div class="questions">
         {quiz.questions.map((q, i) => (
-          <QuestionCard key={q.id} q={q} idx={i} total={quiz.questions.length} locked={locked} patch={patchQuestion} remove={removeQuestion} move={moveQuestion} />
+          <QuestionCard key={q.id} q={q} idx={i} total={quiz.questions.length} locked={locked} patch={patchQuestion} remove={removeQuestion} move={moveQuestion} quizId={id} editToken={token} />
         ))}
       </div>
 
@@ -257,6 +258,8 @@ function QuestionCard({
   patch,
   remove,
   move,
+  quizId,
+  editToken,
 }: {
   q: Question;
   idx: number;
@@ -265,7 +268,43 @@ function QuestionCard({
   patch: (idx: number, patch: Partial<Question>) => void;
   remove: (idx: number) => void;
   move: (idx: number, dir: -1 | 1) => void;
+  quizId: string;
+  editToken: string;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [imgError, setImgError] = useState('');
+
+  // client-side resize (≤1600px, WebP with JPEG fallback) → upload → attach
+  const onPick = async (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-picking the same file
+    if (!file || uploading) return;
+    setImgError('');
+    setUploading(true);
+    try {
+      const prepared = await prepareImage(file);
+      const up = await uploadImage(quizId, editToken, prepared);
+      patch(idx, { image: { id: up.id, width: up.width, height: up.height } });
+    } catch (err) {
+      setImgError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = async () => {
+    const img = q.image;
+    if (!img) return;
+    patch(idx, { image: undefined });
+    try {
+      await deleteImage(quizId, editToken, img.id);
+    } catch {
+      // prune-on-save will clean it up
+    }
+  };
+
   return (
     <div class="card qcard">
       <div class="qcard-head">
@@ -293,6 +332,36 @@ function QuestionCard({
         disabled={locked}
         onInput={(e) => patch(idx, { prompt: (e.target as HTMLTextAreaElement).value })}
       />
+
+      <div class="image-editor">
+        {q.image ? (
+          <div class="image-thumb-row">
+            <img
+              class="q-image"
+              src={`/api/images/${q.image.id}`}
+              width={q.image.width}
+              height={q.image.height}
+              alt="Question illustration"
+            />
+            <div class="image-thumb-meta">
+              <span class="micro">
+                {q.image.width}×{q.image.height}
+              </span>
+              <button class="icon-btn" disabled={locked || uploading} title="Remove image" onClick={removeImage}>
+                ✕
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <button class="btn btn-ghost btn-sm" disabled={locked || uploading} onClick={() => fileRef.current?.click()}>
+              {uploading ? 'Uploading…' : '+ Add image'}
+            </button>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPick} />
+        {imgError && <div class="error">{imgError}</div>}
+      </div>
 
       <div class="qrow">
         <label class="field-label">Time limit</label>

@@ -5,13 +5,15 @@
 import { Hono } from 'hono';
 import { SessionDO } from './session-do.ts';
 import { validateQuiz } from '../shared/validate.ts';
+import { sniffImageMime, IMAGE_LIMITS } from '../shared/image.ts';
 import type { SessionSummary } from '../shared/types.ts';
-import { editToken, hostToken as newHostToken, joinCode, normalizeCode, quizId } from './ids.ts';
+import { editToken, hostToken as newHostToken, imageId, joinCode, normalizeCode, quizId } from './ids.ts';
 
 interface Env {
   DB: D1Database;
   SESSION: DurableObjectNamespace;
   ASSETS: Fetcher;
+  IMAGES: R2Bucket;
   /** Set by the self-host adapter (server/node.ts): the client's IP. */
   remoteIp?: string;
 }
@@ -219,9 +221,21 @@ app.put('/api/quizzes/:id', async (c) => {
 
   const v = validateQuiz(row.id, body?.quiz);
   if (!v.ok || !v.quiz) return c.json({ error: 'invalid', errors: v.errors }, 400);
+
+  // every referenced image must exist and belong to this quiz
+  const owned = await ownedImages(c.env, row.id);
+  const refs = [...new Set(v.quiz.questions.map((q) => q.image?.id).filter((x): x is string => !!x))];
+  const missing = refs.find((id) => !owned.has(id));
+  if (missing) return c.json({ error: 'invalid', errors: [`Image not found: ${missing}`] }, 400);
+
   await c.env.DB.prepare('UPDATE quizzes SET title = ?, data = ?, updated_at = ? WHERE id = ?')
     .bind(v.quiz.title, JSON.stringify({ questions: v.quiz.questions }), Date.now(), row.id)
     .run();
+
+  // prune-on-save: images this quiz owns but the saved quiz no longer references
+  for (const id of owned) {
+    if (!refs.includes(id)) await deleteImage(c.env, id);
+  }
   return c.json({ ok: true, savedAt: Date.now(), title: v.quiz.title });
 });
 
@@ -283,9 +297,106 @@ app.delete('/api/quizzes/:id', async (c) => {
       ...chunk.map((code) => c.env.DB.prepare('DELETE FROM players WHERE session_code = ?').bind(code)),
     ]);
   }
+  for (const img of await ownedImages(c.env, id)) await deleteImage(c.env, img);
   await c.env.DB.prepare('DELETE FROM sessions WHERE quiz_id = ?').bind(id).run();
   await c.env.DB.prepare('DELETE FROM quizzes WHERE id = ?').bind(id).run();
   return c.json({ ok: true, deletedSessions: codes.length });
+});
+
+// ------------------------------------------------------------- question images
+//
+// The binary lives in R2 under `images/<id>`; metadata (ownership, mime,
+// dimensions) in the `images` table. Uploads come pre-resized from the editor
+// (client-side canvas → WebP/JPEG), so the Worker only validates and stores.
+// Images are immutable — change = delete + re-upload — which is why serving
+// uses a year-long immutable cache.
+
+const imageKey = (id: string) => `images/${id}`;
+
+/** Are all image references valid for this quiz? Returns the owned ids. */
+async function ownedImages(env: Env, quizId: string): Promise<Set<string>> {
+  const rows = await env.DB.prepare('SELECT id FROM images WHERE quiz_id = ?').bind(quizId).all<{ id: string }>();
+  return new Set((rows.results ?? []).map((r) => r.id));
+}
+
+async function deleteImage(env: Env, id: string): Promise<void> {
+  await env.IMAGES.delete(imageKey(id));
+  await env.DB.prepare('DELETE FROM images WHERE id = ?').bind(id).run();
+}
+
+app.post('/api/quizzes/:id/images', async (c) => {
+  const row = await quizRow(c.env, c.req.param('id'));
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  if (row.edit_token !== (c.req.header('x-edit-token') ?? '')) return c.json({ error: 'forbidden' }, 403);
+
+  const declared = Number(c.req.header('content-length') ?? 0);
+  if (declared > IMAGE_LIMITS.maxBytes) return c.json({ error: 'too_large', message: 'Image exceeds 512 KB after resize.' }, 413);
+
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  if (bytes.length === 0) return c.json({ error: 'empty' }, 400);
+  if (bytes.length > IMAGE_LIMITS.maxBytes) return c.json({ error: 'too_large', message: 'Image exceeds 512 KB after resize.' }, 413);
+
+  const mime = sniffImageMime(bytes);
+  if (!mime) return c.json({ error: 'unsupported', message: 'Only WebP, JPEG or PNG images are accepted.' }, 400);
+
+  const width = Math.round(Number(c.req.query('w') ?? 0));
+  const height = Math.round(Number(c.req.query('h') ?? 0));
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1 || width > IMAGE_LIMITS.maxDimension || height > IMAGE_LIMITS.maxDimension) {
+    return c.json({ error: 'bad_dimensions' }, 400);
+  }
+
+  const stats = await c.env.DB.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS total FROM images WHERE quiz_id = ?')
+    .bind(row.id)
+    .first<{ n: number; total: number }>();
+  if ((stats?.n ?? 0) >= IMAGE_LIMITS.maxPerQuiz) return c.json({ error: 'too_many', message: `At most ${IMAGE_LIMITS.maxPerQuiz} images per quiz.` }, 413);
+  if ((stats?.total ?? 0) + bytes.length > IMAGE_LIMITS.maxTotalBytes) return c.json({ error: 'quota', message: 'Image storage quota for this quiz is full.' }, 413);
+
+  const id = imageId();
+  await c.env.IMAGES.put(imageKey(id), bytes);
+  const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  await c.env.DB.prepare('INSERT INTO images (id, quiz_id, mime, bytes, width, height, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, row.id, mime, bytes.length, width, height, sha, Date.now())
+    .run();
+
+  return c.json({ id, width, height, url: `/api/images/${id}` });
+});
+
+app.get('/api/images/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!/^[A-Za-z0-9]{6,40}$/.test(id)) return c.json({ error: 'bad_id' }, 400);
+
+  const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
+  if (cache) {
+    const hit = await cache.match(new Request(c.req.url));
+    if (hit) return hit;
+  }
+
+  const row = await c.env.DB.prepare('SELECT mime FROM images WHERE id = ?').bind(id).first<{ mime: string }>();
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  const obj = await c.env.IMAGES.get(imageKey(id));
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+
+  const res = new Response(obj.body, {
+    headers: {
+      'content-type': row.mime,
+      'cache-control': 'public, max-age=31536000, immutable',
+    },
+  });
+  if (cache) await cache.put(new Request(c.req.url), res.clone());
+  return res;
+});
+
+app.delete('/api/quizzes/:id/images/:imageId', async (c) => {
+  const row = await quizRow(c.env, c.req.param('id'));
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  if (row.edit_token !== (c.req.header('x-edit-token') ?? '')) return c.json({ error: 'forbidden' }, 403);
+  const live = await liveSession(c.env, row.id);
+  if (live) return c.json({ error: 'locked', code: live.code, message: `A live session (${live.code}) is running.` }, 409);
+  const imageId = c.req.param('imageId');
+  const owned = await ownedImages(c.env, row.id);
+  if (!owned.has(imageId)) return c.json({ error: 'not_found' }, 404);
+  await deleteImage(c.env, imageId);
+  return c.json({ ok: true });
 });
 
 // ----------------------------------------------------------------- sessions

@@ -7,6 +7,15 @@ export interface QuestionBase {
   prompt: string;
   /** Seconds the host-side question stays open. 5–120. */
   timeLimitSec: number;
+  /** Optional illustration — reference only; the binary lives in image storage. */
+  image?: QuestionImage;
+}
+
+/** Reference to an uploaded image (never the bytes — those live in R2/disk). */
+export interface QuestionImage {
+  id: string;
+  width: number;
+  height: number;
 }
 
 export interface ChoiceQuestion extends QuestionBase {
@@ -71,6 +80,7 @@ export interface PublicQuestion {
   type: QuestionType;
   prompt: string;
   timeLimitSec: number;
+  image?: QuestionImage; // reference only; served from /api/images/:id
   options?: string[]; // choice (texts are public; correct index is not)
   likertMin?: number;
   likertMax?: number;

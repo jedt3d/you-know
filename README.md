@@ -9,10 +9,12 @@ free tier** (one Worker + D1 + hibernating Durable Objects).
   canvas, gray app surface, white cards with soft shadows, azure accent
   `#0A89FF`, Google-hued choice colors, green/red true-false, Questrial type
   (hierarchy by size, never bold), light-only
-- **4 question types** — multiple choice (identity-colored shapes), true/false,
-  short answer (normalized matching, every accepted answer counts, or tick
-  accept-any to score any non-empty answer), Likert poll (unscored, or mark
-  correct values in the editor for flat points)
+- **4 question types, with images** — multiple choice (Google-hued circles +
+  shapes), true/false (green/red), short answer (normalized matching, every
+  accepted answer counts, or tick accept-any to score any non-empty answer),
+  Likert poll (unscored, or mark correct values for flat points). Any question
+  can carry an image — resized in the browser to ≤1600px WebP, stored in R2,
+  served edge-cached
 - **Kahoot-style scoring** — 500–1000 points decaying with answer speed;
   short answers and marked Likert values score flat 1000
 - **Host-paced** — questions advance when *you* click; pauses are free
