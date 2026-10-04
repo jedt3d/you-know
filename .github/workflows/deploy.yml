@@ -1,8 +1,8 @@
-# Deploy to the self-hosted Linux server whenever a release is published.
-# One-time setup (server user, systemd unit, SSH key, secrets):
-# see deploy/setup-server.md
+# Deploy to Cloudflare Workers whenever a release is published.
+# One-time setup (D1 database + API token + repo secret):
+# see README.md → "Deploy to Cloudflare".
 
-name: Deploy to server on release
+name: Deploy to Cloudflare on release
 
 on:
   release:
@@ -10,12 +10,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy
+  group: deploy-cloudflare
   cancel-in-progress: false
-
-env:
-  DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/you-know' }}
-  SSH_PORT: ${{ vars.SSH_PORT || '22' }}
 
 jobs:
   deploy:
@@ -29,48 +25,34 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Typecheck, unit tests, build
+      - name: Typecheck, unit tests, build client
         run: |
           npm ci
           npm run check
           npm test
           npm run build
-          npm run build:server
 
-      - name: Configure SSH
+      - name: Fail fast if D1 is not configured yet
         run: |
-          install -m 600 /dev/null ~/.ssh/id_ed25519
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          ssh-keyscan -p "$SSH_PORT" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
-          ssh-keyscan -p "$SSH_PORT" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          if grep -q 'local-dev-placeholder' wrangler.jsonc; then
+            echo "::error::D1 database_id is still the local placeholder. Run 'npx wrangler d1 create you-know', paste the printed database_id into wrangler.jsonc, commit, then re-run."
+            exit 1
+          fi
 
-      - name: Upload build
-        run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/id_ed25519 -p $SSH_PORT" \
-            dist/ package.json package-lock.json deploy/ \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:$DEPLOY_DIR/"
+      - name: Apply D1 migrations
+        run: npx wrangler d1 migrations apply you-know --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Install dependencies and restart service
-        run: |
-          ssh -i ~/.ssh/id_ed25519 -p "$SSH_PORT" \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
-            set -e
-            cd $DEPLOY_DIR
-            npm ci --omit=dev
-            if [ ! -f /etc/systemd/system/you-know.service ]; then
-              sudo cp deploy/you-know.service /etc/systemd/system/
-              sudo systemctl daemon-reload
-              sudo systemctl enable you-know
-            fi
-            sudo systemctl restart you-know
-            sleep 2
-            systemctl is-active you-know
-            curl -sf http://127.0.0.1:8787/api/health
-          "
+      - name: Deploy Worker
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deployment summary
         run: |
-          echo "### Deployed ${{ github.event.release.name || github.sha }} to ${{ secrets.SSH_HOST }}:$DEPLOY_DIR" >> $GITHUB_STEP_SUMMARY
-          echo "- service: you-know (systemd)" >> $GITHUB_STEP_SUMMARY
-          echo "- health: /api/health OK" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployed ${{ github.event.release.name || github.sha }} to Cloudflare Workers" >> $GITHUB_STEP_SUMMARY
+          echo "- Worker: you-know → https://you-know.<your-subdomain>.workers.dev" >> $GITHUB_STEP_SUMMARY
+          echo "- D1: migrations applied to you-know" >> $GITHUB_STEP_SUMMARY

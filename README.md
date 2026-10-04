@@ -46,13 +46,40 @@ npm run e2e      # full-game E2E — needs `wrangler dev --port 8788` running
 
 ## Deploy to Cloudflare (free plan)
 
-```bash
-npm run build
-npx wrangler d1 create you-know        # copy the printed database_id
-#   → paste into wrangler.jsonc → d1_databases[0].database_id
-npm run db:migrate                      # apply schema to remote D1
-npm run deploy                          # → https://you-know.<your-subdomain>.workers.dev
-```
+Publishing a GitHub release triggers
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml): it typechecks,
+tests, builds, applies D1 migrations and runs `wrangler deploy`.
+
+### One-time setup
+
+1. **Log in locally** (opens a browser once):
+
+   ```bash
+   npx wrangler login
+   ```
+
+2. **Create the D1 database**, then paste the printed `database_id` into
+   `wrangler.jsonc` (`d1_databases[0].database_id`) and commit:
+
+   ```bash
+   npx wrangler d1 create you-know
+   ```
+
+3. **Create an API token** for CI: Cloudflare dashboard → My Profile →
+   API Tokens → *Create Token* → use the **Edit Cloudflare Workers** template
+   (it covers Workers Scripts, D1, and Durable Objects) → copy the token value.
+
+4. **Add the GitHub secret**: repo → Settings → Secrets and variables →
+   Actions → *New repository secret* → name `CLOUDFLARE_API_TOKEN`, value =
+   the token. Optionally add `CLOUDFLARE_ACCOUNT_ID` (your account id, shown
+   on the dashboard's right sidebar) if your token spans multiple accounts.
+
+5. **Deploy**: publish a release (`gh release create v0.1.1 …`) or run the
+   workflow manually from the Actions tab. The app lands at
+   `https://you-know.<your-subdomain>.workers.dev` (enable the workers.dev
+   subdomain under the Worker's settings, or attach a custom domain there).
+
+To deploy from your machine instead: `npm run build && npm run db:migrate && npm run deploy`.
 
 ## Self-host on your own Linux server
 
@@ -66,11 +93,9 @@ npm run build && npm run build:server
 YK_PORT=8787 YK_DB_PATH=./data/db.sqlite npm start
 ```
 
-For automatic deploys **whenever a GitHub release is published** (build →
-test → rsync over SSH → systemd restart → health check), see
-[deploy/setup-server.md](deploy/setup-server.md) for the one-time server +
-secrets setup; the workflow lives at
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+The self-host deploy is a **manual workflow** (Actions → *Self-host deploy
+(manual)* → Run) — releases deploy to Cloudflare instead. One-time server +
+secrets setup: [deploy/setup-server.md](deploy/setup-server.md).
 
 No secrets or env vars are needed. Limits notes: [docs/research/cloudflare-free-tier.md](docs/research/cloudflare-free-tier.md)
 

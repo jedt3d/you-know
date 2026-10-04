@@ -5,9 +5,11 @@ server (`server/`) shims D1 → SQLite and Durable Objects → in-process
 session objects with state persisted to SQLite, so live games even survive
 a server restart. The full e2e suite passes against both runtimes.
 
-GitHub Actions deploys **whenever a release is published** (also runnable
-manually): it builds, tests, rsyncs the bundle to your server over SSH,
-runs `npm ci --omit=dev`, restarts the systemd service and health-checks it.
+The **Self-host deploy (manual)** workflow (Actions → Run workflow) builds,
+tests, rsyncs the bundle to your server over SSH, runs `npm ci --omit=dev`,
+restarts the systemd service and health-checks it. Releases deploy to
+Cloudflare instead (see the README) — this path is opt-in whenever you want
+your own box.
 
 ## One-time server setup
 
