@@ -182,12 +182,20 @@ export function Spinner() {
   return <div class="spinner" aria-label="Loading" />;
 }
 
-/** Build identity — commit + build time injected by scripts/build.mjs. */
-export function Footer() {
+/** Build identity + optional admin sign-out, centered at the page bottom. */
+export function Footer({ signOut }: { signOut?: () => void }) {
   const t = new Date(__BUILD_TIME__);
   const when = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
   return (
     <footer class="app-footer">
+      {signOut && (
+        <>
+          <button class="footer-link" onClick={signOut}>
+            Sign out
+          </button>
+          {' · '}
+        </>
+      )}
       <span class="mono">v{__APP_VERSION__}</span> · build <span class="mono">{__BUILD_COMMIT__}</span> · {when}
     </footer>
   );

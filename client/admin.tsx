@@ -75,9 +75,21 @@ export function AdminGate({ children }: { children: (token: string, signOut: () 
     setPhase('login');
   };
 
-  if (phase === 'loading') return <p class="muted">Checking…</p>;
+  // the gate owns the page footer: unlocked pages get the sign-out link in it
+  if (phase === 'loading')
+    return (
+      <>
+        <p class="muted">Checking…</p>
+        <Footer />
+      </>
+    );
   if (phase === 'ok') return <>{children(token, signOut)}</>;
-  return <PasswordForm mode={phase} busy={busy} error={error} onSubmit={(p) => submit(p, phase)} />;
+  return (
+    <>
+      <PasswordForm mode={phase} busy={busy} error={error} onSubmit={(p) => submit(p, phase)} />
+      <Footer />
+    </>
+  );
 }
 
 function PasswordForm({
@@ -154,7 +166,6 @@ export function AdminPage() {
         <div class="card-title">Admin — recorded data</div>
       </div>
       <AdminGate>{(token, signOut) => <AdminData token={token} signOut={signOut} />}</AdminGate>
-      <Footer />
     </div>
   );
 }
@@ -202,14 +213,7 @@ function AdminData({ token, signOut }: { token: string; signOut: () => void }) {
 
   return (
     <>
-      <div class="qrow">
-        <p class="muted small" style="flex:1">
-          Click a quiz title to edit it; click a session row for its records.
-        </p>
-        <button class="btn btn-ghost btn-sm" onClick={signOut}>
-          Sign out
-        </button>
-      </div>
+      <p class="muted small">Click a quiz title to edit it; click a session row for its records.</p>
 
       <div class="card">
         <div class="card-title">Quizzes ({data.quizzes.length})</div>
@@ -347,6 +351,8 @@ function AdminData({ token, signOut }: { token: string; signOut: () => void }) {
           </tbody>
         </table>
       </div>
+
+      <Footer signOut={signOut} />
     </>
   );
 }

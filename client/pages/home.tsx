@@ -15,8 +15,14 @@ export default function Home() {
       <Wordmark />
       <p class="tagline">Live quiz for your talk — players join with a code or QR.</p>
       <JoinCard />
-      <AdminGate>{(token, signOut) => <HostCard token={token} signOut={signOut} />}</AdminGate>
-      <Footer />
+      <AdminGate>
+        {(token, signOut) => (
+          <>
+            <HostCard token={token} />
+            <Footer signOut={signOut} />
+          </>
+        )}
+      </AdminGate>
     </div>
   );
 }
@@ -59,7 +65,7 @@ function JoinCard() {
   );
 }
 
-function HostCard({ token, signOut }: { token: string; signOut: () => void }) {
+function HostCard({ token }: { token: string }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [data, setData] = useState<AdminOverview | null>(null);
@@ -96,9 +102,6 @@ function HostCard({ token, signOut }: { token: string; signOut: () => void }) {
         <a class="home-row-sub admin-link" href="#/admin">
           Recorded data →
         </a>
-        <button class="btn btn-ghost btn-sm" onClick={signOut}>
-          Sign out
-        </button>
       </div>
       <p class="muted small">Create a quiz, then go live and project it.</p>
       <button class="btn btn-secondary" disabled={creating} onClick={host}>
