@@ -22,7 +22,7 @@
       "database_name": "you-know",
       // Placeholder for local dev; replace with the real id after
       // `wrangler d1 create you-know` (see README deploy steps).
-      "database_id": "5906d8d8-57d0-40c3-8935-0b6dd68a0cac",
+      "database_id": "57744f3d-dd80-492f-b96d-6f297656db0f",
       "migrations_dir": "migrations"
     }
   ],
