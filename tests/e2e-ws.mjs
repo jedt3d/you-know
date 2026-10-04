@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:8788';
+const WS_BASE = BASE.replace(/^http/, 'ws');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(path, init) {
@@ -120,11 +121,11 @@ try {
   }
   step('3 players joined');
 
-  const host0 = new Chan(`ws://127.0.0.1:8788/ws/${code}?h=${hostToken}`);
+  const host0 = new Chan(`${WS_BASE}/ws/${code}?h=${hostToken}`);
   await host0.opened;
   host = host0;
   for (const [name, p] of Object.entries(players)) {
-    const c = new Chan(`ws://127.0.0.1:8788/ws/${code}?p=${p.playerToken}`);
+    const c = new Chan(`${WS_BASE}/ws/${code}?p=${p.playerToken}`);
     await c.opened;
     chans[name] = c;
   }

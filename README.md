@@ -54,6 +54,24 @@ npm run db:migrate                      # apply schema to remote D1
 npm run deploy                          # → https://you-know.<your-subdomain>.workers.dev
 ```
 
+## Self-host on your own Linux server
+
+The same code also runs on plain Node (`server/`): SQLite replaces D1 and
+in-process session objects replace Durable Objects, with live-game state
+persisted so sessions survive restarts. The full e2e suite passes against
+both runtimes.
+
+```bash
+npm run build && npm run build:server
+YK_PORT=8787 YK_DB_PATH=./data/db.sqlite npm start
+```
+
+For automatic deploys **whenever a GitHub release is published** (build →
+test → rsync over SSH → systemd restart → health check), see
+[deploy/setup-server.md](deploy/setup-server.md) for the one-time server +
+secrets setup; the workflow lives at
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+
 No secrets or env vars are needed. Limits notes: [docs/research/cloudflare-free-tier.md](docs/research/cloudflare-free-tier.md)
 
 ## Architecture (short version)

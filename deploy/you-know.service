@@ -1,0 +1,26 @@
+[Unit]
+Description=You Know? live quiz game
+After=network.target
+
+[Service]
+Type=simple
+User=you-know
+Group=you-know
+WorkingDirectory=/opt/you-know
+Environment=NODE_ENV=production
+Environment=YK_PORT=8787
+Environment=YK_HOST=127.0.0.1
+# YK_HOST=127.0.0.1 keeps the app behind your reverse proxy; set 0.0.0.0 to
+# expose the port directly.
+Environment=YK_DB_PATH=/var/lib/you-know/db.sqlite
+ExecStart=/usr/bin/env node dist/server/server.mjs
+Restart=on-failure
+RestartSec=3
+# Hardening (relax if they get in the way)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/you-know
+
+[Install]
+WantedBy=multi-user.target

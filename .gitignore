@@ -161,3 +161,6 @@ dist/
 .wrangler/
 .dev.vars
 .DS_Store
+
+# local self-host database
+data/

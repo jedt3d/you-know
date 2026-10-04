@@ -1,0 +1,76 @@
+# Deploy to the self-hosted Linux server whenever a release is published.
+# One-time setup (server user, systemd unit, SSH key, secrets):
+# see deploy/setup-server.md
+
+name: Deploy to server on release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/you-know' }}
+  SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Typecheck, unit tests, build
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+          npm run build:server
+
+      - name: Configure SSH
+        run: |
+          install -m 600 /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$SSH_PORT" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload build
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_ed25519 -p $SSH_PORT" \
+            dist/ package.json package-lock.json deploy/ \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:$DEPLOY_DIR/"
+
+      - name: Install dependencies and restart service
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p "$SSH_PORT" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
+            set -e
+            cd $DEPLOY_DIR
+            npm ci --omit=dev
+            if [ ! -f /etc/systemd/system/you-know.service ]; then
+              sudo cp deploy/you-know.service /etc/systemd/system/
+              sudo systemctl daemon-reload
+              sudo systemctl enable you-know
+            fi
+            sudo systemctl restart you-know
+            sleep 2
+            systemctl is-active you-know
+            curl -sf http://127.0.0.1:8787/api/health
+          "
+
+      - name: Deployment summary
+        run: |
+          echo "### Deployed ${{ github.event.release.name || github.sha }} to ${{ secrets.SSH_HOST }}:$DEPLOY_DIR" >> $GITHUB_STEP_SUMMARY
+          echo "- service: you-know (systemd)" >> $GITHUB_STEP_SUMMARY
+          echo "- health: /api/health OK" >> $GITHUB_STEP_SUMMARY
