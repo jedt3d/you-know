@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -147,3 +148,16 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+=======
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+.DS_Store
+>>>>>>> 1842daf (You Know? v1 — live group quiz game on Cloudflare free tier)
+
+# You Know? — Cloudflare local state
+.wrangler/
+.dev.vars
+.DS_Store
